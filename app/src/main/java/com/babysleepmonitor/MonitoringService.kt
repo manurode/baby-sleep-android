@@ -24,6 +24,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import com.babysleepmonitor.data.StatusResponse
 
 /**
  * Foreground Service that polls the baby monitor server for status updates.
@@ -264,14 +265,4 @@ class MonitoringService : Service() {
             vibrator.vibrate(pattern, -1)
         }
     }
-
-    /**
-     * Data class for parsing server status response
-     */
-    data class StatusResponse(
-        val motion_detected: Boolean = false,
-        val motion_score: Double = 0.0,
-        val alarm_active: Boolean = false,
-        val seconds_since_motion: Int = 0
-    )
 }

@@ -1,14 +1,16 @@
 # Baby Sleep Monitor - Android App
 
-A native Android companion app for the Baby Sleep Monitor that runs in the background and alerts you with system notifications when no movement is detected.
+A native Android companion app for the Baby Sleep Monitor that displays the live video feed with overlay controls and alerts you with system notifications when no movement is detected.
 
 ## Features
 
-- 📱 **WebView Interface**: Full access to the baby monitor web UI directly in the app
+- 📹 **Native Video Display**: Direct MJPEG stream rendering (no WebView) for better performance
+- 🎛️ **Enhancement Controls**: Adjust zoom (1-4x), contrast (1-3), and brightness (-50 to +50) in real-time
+- 📊 **Live Status Overlay**: Motion score and alarm status displayed on screen
 - 🔔 **Background Monitoring**: Foreground service that monitors even when the app is closed or screen is off
 - 🚨 **High-Priority Notifications**: Alarm notifications with sound and vibration when no movement is detected for 10 seconds
 - 🌙 **Screen-Off Operation**: Keeps monitoring even when your phone screen is off using Wake Locks
-- 🔄 **Auto-Recovery**: Automatically cancels alerts when movement resumes
+- 🔄 **Auto-Recovery**: Automatically reconnects on network issues with exponential backoff
 
 ---
 
@@ -175,8 +177,12 @@ Open a terminal in the project directory and run:
 
 1. Enter your server URL
 2. Tap **"Connect to Monitor"**
-3. The WebView will load the full baby monitor interface
-4. You can use all features: ROI selection, zoom, contrast, brightness
+3. The native video display will show the live camera feed
+4. A status overlay shows motion score and alarm status
+5. Tap the ⚙️ button (bottom-right) to open enhancement controls:
+   - **Zoom**: 1x to 4x digital zoom
+   - **Contrast**: Enhance visibility in low light
+   - **Brightness**: Adjust brightness level
 
 ### Enabling Background Monitoring
 
@@ -238,21 +244,27 @@ baby-sleep-android/
 ├── app/
 │   ├── src/main/
 │   │   ├── java/com/babysleepmonitor/
-│   │   │   ├── MainActivity.kt       # Main UI with WebView
-│   │   │   ├── MonitoringService.kt  # Background service
-│   │   │   ├── SettingsActivity.kt   # Settings screen
-│   │   │   └── BootReceiver.kt       # Auto-start on boot
+│   │   │   ├── MainActivity.kt         # Main UI with native video display
+│   │   │   ├── MonitoringService.kt    # Background alarm service
+│   │   │   ├── SettingsActivity.kt     # Settings screen
+│   │   │   ├── BootReceiver.kt         # Auto-start on boot
+│   │   │   ├── data/
+│   │   │   │   ├── StatusResponse.kt   # /status API response model
+│   │   │   │   └── SettingsResponse.kt # /get_settings API response model
+│   │   │   └── network/
+│   │   │       ├── ApiClient.kt        # HTTP client for API calls
+│   │   │       └── MjpegInputStream.kt # MJPEG stream parser
 │   │   ├── res/
-│   │   │   ├── layout/               # UI layouts
-│   │   │   ├── values/               # Colors, strings, themes
-│   │   │   └── drawable/             # Button styles, icons
-│   │   └── AndroidManifest.xml       # App permissions & config
-│   └── build.gradle.kts              # App dependencies
+│   │   │   ├── layout/                 # UI layouts
+│   │   │   ├── values/                 # Colors, strings, themes
+│   │   │   └── drawable/               # Button styles, overlays
+│   │   └── AndroidManifest.xml         # App permissions & config
+│   └── build.gradle.kts                # App dependencies
 ├── gradle/
-│   └── libs.versions.toml            # Version catalog
-├── build.gradle.kts                  # Project config
-├── settings.gradle.kts               # Project settings
-└── README.md                         # This file
+│   └── libs.versions.toml              # Version catalog
+├── build.gradle.kts                    # Project config
+├── settings.gradle.kts                 # Project settings
+└── README.md                           # This file
 ```
 
 ---
