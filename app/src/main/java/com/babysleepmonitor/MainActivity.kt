@@ -11,19 +11,22 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.cardview.widget.CardView
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.babysleepmonitor.data.StatusResponse
 import com.babysleepmonitor.network.ApiClient
 import com.babysleepmonitor.network.MjpegInputStream
+import com.babysleepmonitor.ui.RoiSelectionView
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -34,8 +37,8 @@ import kotlin.coroutines.coroutineContext
 import kotlin.math.min
 
 /**
- * Main Activity with native video display for the baby monitor.
- * Replaces WebView with ImageView for better performance and reliability.
+ * Main Activity with modern glassmorphism UI for the baby monitor.
+ * Features: native video display, ROI selection, auto-start background service.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -47,28 +50,47 @@ class MainActivity : AppCompatActivity() {
         private const val STATUS_POLL_INTERVAL_MS = 1500L
     }
 
+    // Screens
+    private lateinit var connectionScreen: ConstraintLayout
+    private lateinit var videoScreen: ConstraintLayout
+
     // Connection panel views
-    private lateinit var connectionPanel: LinearLayout
-    private lateinit var servicePanel: LinearLayout
+    private lateinit var connectionPanel: CardView
+    private lateinit var servicePanel: CardView
     private lateinit var serverUrlInput: EditText
     private lateinit var connectButton: Button
-    private lateinit var settingsButton: ImageButton
+    private lateinit var settingsButton: FloatingActionButton
+    private lateinit var serviceIndicator: View
     private lateinit var serviceStatusText: TextView
     private lateinit var toggleServiceButton: Button
 
     // Video container views
     private lateinit var videoContainer: FrameLayout
     private lateinit var videoView: ImageView
-    private lateinit var statusOverlay: LinearLayout
+    private lateinit var roiSelectionView: RoiSelectionView
+    private lateinit var connectionIndicator: View
     private lateinit var connectionStatusText: TextView
+    private lateinit var connectionBadge: LinearLayout
+    private lateinit var alarmBadge: LinearLayout
     private lateinit var motionScoreText: TextView
     private lateinit var alarmStatusText: TextView
     private lateinit var alarmOverlay: LinearLayout
     private lateinit var alarmSecondsText: TextView
-    private lateinit var toggleControlsButton: ImageButton
+
+    // FABs
+    private lateinit var roiButton: FloatingActionButton
+    private lateinit var toggleControlsButton: FloatingActionButton
+    private lateinit var fabContainer: LinearLayout
+
+    // ROI controls
+    private lateinit var roiInstructions: LinearLayout
+    private lateinit var roiActionBar: LinearLayout
+    private lateinit var roiClearButton: Button
+    private lateinit var roiSaveButton: Button
+    private lateinit var roiCancelButton: Button
 
     // Controls panel views
-    private lateinit var controlsPanel: LinearLayout
+    private lateinit var controlsPanel: CardView
     private lateinit var zoomSeekBar: SeekBar
     private lateinit var zoomValueText: TextView
     private lateinit var contrastSeekBar: SeekBar
@@ -81,7 +103,14 @@ class MainActivity : AppCompatActivity() {
     private var serverUrl: String = ""
     private var isConnected = false
     private var controlsPanelVisible = false
+    private var roiModeActive = false
     private var reconnectDelay = INITIAL_RECONNECT_DELAY_MS
+    
+    // Pending ROI coordinates (before save)
+    private var pendingRoiX: Float? = null
+    private var pendingRoiY: Float? = null
+    private var pendingRoiW: Float? = null
+    private var pendingRoiH: Float? = null
 
     // Coroutine jobs
     private var videoStreamJob: Job? = null
@@ -119,25 +148,44 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
+        // Screens
+        connectionScreen = findViewById(R.id.connectionScreen)
+        videoScreen = findViewById(R.id.videoScreen)
+
         // Connection panel
         connectionPanel = findViewById(R.id.connectionPanel)
         servicePanel = findViewById(R.id.servicePanel)
         serverUrlInput = findViewById(R.id.serverUrlInput)
         connectButton = findViewById(R.id.connectButton)
         settingsButton = findViewById(R.id.settingsButton)
+        serviceIndicator = findViewById(R.id.serviceIndicator)
         serviceStatusText = findViewById(R.id.serviceStatusText)
         toggleServiceButton = findViewById(R.id.toggleServiceButton)
 
         // Video container
         videoContainer = findViewById(R.id.videoContainer)
         videoView = findViewById(R.id.videoView)
-        statusOverlay = findViewById(R.id.statusOverlay)
+        roiSelectionView = findViewById(R.id.roiSelectionView)
+        connectionIndicator = findViewById(R.id.connectionIndicator)
         connectionStatusText = findViewById(R.id.connectionStatusText)
+        connectionBadge = findViewById(R.id.connectionBadge)
+        alarmBadge = findViewById(R.id.alarmBadge)
         motionScoreText = findViewById(R.id.motionScoreText)
         alarmStatusText = findViewById(R.id.alarmStatusText)
         alarmOverlay = findViewById(R.id.alarmOverlay)
         alarmSecondsText = findViewById(R.id.alarmSecondsText)
+
+        // FABs
+        roiButton = findViewById(R.id.roiButton)
         toggleControlsButton = findViewById(R.id.toggleControlsButton)
+        fabContainer = findViewById(R.id.fabContainer)
+
+        // ROI controls
+        roiInstructions = findViewById(R.id.roiInstructions)
+        roiActionBar = findViewById(R.id.roiActionBar)
+        roiClearButton = findViewById(R.id.roiClearButton)
+        roiSaveButton = findViewById(R.id.roiSaveButton)
+        roiCancelButton = findViewById(R.id.roiCancelButton)
 
         // Controls panel
         controlsPanel = findViewById(R.id.controlsPanel)
@@ -157,8 +205,10 @@ class MainActivity : AppCompatActivity() {
             if (url.isNotEmpty()) {
                 serverUrl = url
                 saveServerUrl(url)
-                showVideoView()
+                showVideoScreen()
                 startStreaming()
+                // Auto-start background service when connecting
+                autoStartMonitoringService()
             } else {
                 Toast.makeText(this, "Please enter a server URL", Toast.LENGTH_SHORT).show()
             }
@@ -181,6 +231,33 @@ class MainActivity : AppCompatActivity() {
         // Toggle controls button
         toggleControlsButton.setOnClickListener {
             toggleControlsPanel()
+        }
+
+        // ROI button
+        roiButton.setOnClickListener {
+            enterRoiMode()
+        }
+
+        // ROI action buttons
+        roiSaveButton.setOnClickListener {
+            saveRoi()
+        }
+
+        roiClearButton.setOnClickListener {
+            clearRoi()
+        }
+
+        roiCancelButton.setOnClickListener {
+            exitRoiMode()
+        }
+
+        // ROI selection callback
+        roiSelectionView.onRoiSelected = { x, y, w, h ->
+            pendingRoiX = x
+            pendingRoiY = y
+            pendingRoiW = w
+            pendingRoiH = h
+            Log.d(TAG, "ROI selected: x=$x, y=$y, w=$w, h=$h")
         }
 
         // Zoom SeekBar
@@ -239,18 +316,16 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString("server_url", url).apply()
     }
 
-    private fun showVideoView() {
-        connectionPanel.visibility = View.GONE
-        servicePanel.visibility = View.GONE
-        videoContainer.visibility = View.VISIBLE
+    private fun showVideoScreen() {
+        connectionScreen.visibility = View.GONE
+        videoScreen.visibility = View.VISIBLE
         isConnected = true
     }
 
-    private fun showConnectionView() {
-        videoContainer.visibility = View.GONE
+    private fun showConnectionScreen() {
+        videoScreen.visibility = View.GONE
+        connectionScreen.visibility = View.VISIBLE
         controlsPanel.visibility = View.GONE
-        connectionPanel.visibility = View.VISIBLE
-        servicePanel.visibility = View.VISIBLE
         isConnected = false
     }
 
@@ -261,6 +336,105 @@ class MainActivity : AppCompatActivity() {
         if (controlsPanelVisible) {
             loadCurrentSettings()
         }
+    }
+
+    // ==================== ROI MODE ====================
+
+    private fun enterRoiMode() {
+        roiModeActive = true
+        roiSelectionView.visibility = View.VISIBLE
+        roiInstructions.visibility = View.VISIBLE
+        roiActionBar.visibility = View.VISIBLE
+        fabContainer.visibility = View.GONE
+        controlsPanel.visibility = View.GONE
+        controlsPanelVisible = false
+        
+        // Load existing ROI if any
+        loadExistingRoi()
+    }
+
+    private fun exitRoiMode() {
+        roiModeActive = false
+        roiSelectionView.visibility = View.GONE
+        roiInstructions.visibility = View.GONE
+        roiActionBar.visibility = View.GONE
+        fabContainer.visibility = View.VISIBLE
+        roiSelectionView.clearRoi()
+        clearPendingRoi()
+    }
+
+    private fun loadExistingRoi() {
+        lifecycleScope.launch {
+            try {
+                val settings = ApiClient.getSettings(serverUrl)
+                if (settings.has_roi && settings.roi != null && settings.roi.size == 4) {
+                    withContext(Dispatchers.Main) {
+                        roiSelectionView.setRoi(
+                            settings.roi[0],
+                            settings.roi[1],
+                            settings.roi[2],
+                            settings.roi[3]
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load existing ROI: ${e.message}")
+            }
+        }
+    }
+
+    private fun saveRoi() {
+        val x = pendingRoiX
+        val y = pendingRoiY
+        val w = pendingRoiW
+        val h = pendingRoiH
+
+        if (x != null && y != null && w != null && h != null) {
+            lifecycleScope.launch {
+                try {
+                    val success = ApiClient.setRoi(serverUrl, x, y, w, h)
+                    withContext(Dispatchers.Main) {
+                        if (success) {
+                            Toast.makeText(this@MainActivity, "Detection zone saved", Toast.LENGTH_SHORT).show()
+                            exitRoiMode()
+                        } else {
+                            Toast.makeText(this@MainActivity, "Failed to save zone", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to save ROI: ${e.message}")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Error saving zone", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        } else {
+            Toast.makeText(this, "Please draw a detection zone first", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun clearRoi() {
+        lifecycleScope.launch {
+            try {
+                val success = ApiClient.resetRoi(serverUrl)
+                withContext(Dispatchers.Main) {
+                    if (success) {
+                        roiSelectionView.clearRoi()
+                        clearPendingRoi()
+                        Toast.makeText(this@MainActivity, "Detection zone cleared", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to clear ROI: ${e.message}")
+            }
+        }
+    }
+
+    private fun clearPendingRoi() {
+        pendingRoiX = null
+        pendingRoiY = null
+        pendingRoiW = null
+        pendingRoiH = null
     }
 
     // ==================== STREAMING ====================
@@ -287,13 +461,13 @@ class MainActivity : AppCompatActivity() {
     private suspend fun streamVideo() {
         while (coroutineContext.isActive) {
             try {
-                updateConnectionStatus("🟡 Connecting...")
+                updateConnectionStatus("Connecting", ConnectionState.CONNECTING)
                 
                 val response = ApiClient.getVideoStream(serverUrl)
                 
                 if (!response.isSuccessful) {
                     Log.e(TAG, "Video stream request failed: ${response.code}")
-                    updateConnectionStatus("🔴 Server error: ${response.code}")
+                    updateConnectionStatus("Error ${response.code}", ConnectionState.ERROR)
                     response.close()
                     handleReconnect()
                     continue
@@ -309,7 +483,7 @@ class MainActivity : AppCompatActivity() {
                 
                 // Successfully connected - reset reconnect delay
                 reconnectDelay = INITIAL_RECONNECT_DELAY_MS
-                updateConnectionStatus("🟢 Connected")
+                updateConnectionStatus("Connected", ConnectionState.CONNECTED)
                 
                 val mjpegStream = MjpegInputStream(inputStream)
                 
@@ -333,7 +507,7 @@ class MainActivity : AppCompatActivity() {
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Stream error: ${e.message}")
-                updateConnectionStatus("🔴 Connection lost")
+                updateConnectionStatus("Disconnected", ConnectionState.ERROR)
             }
             
             if (coroutineContext.isActive) {
@@ -342,8 +516,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private enum class ConnectionState { CONNECTING, CONNECTED, ERROR }
+
+    private suspend fun updateConnectionStatus(status: String, state: ConnectionState) {
+        withContext(Dispatchers.Main) {
+            connectionStatusText.text = status
+            
+            val indicatorDrawable = when (state) {
+                ConnectionState.CONNECTING -> R.drawable.status_dot_connecting
+                ConnectionState.CONNECTED -> R.drawable.status_dot_connected
+                ConnectionState.ERROR -> R.drawable.status_dot_disconnected
+            }
+            connectionIndicator.setBackgroundResource(indicatorDrawable)
+        }
+    }
+
     private suspend fun handleReconnect() {
-        updateConnectionStatus("🟡 Reconnecting in ${reconnectDelay / 1000}s...")
+        updateConnectionStatus("Reconnecting...", ConnectionState.CONNECTING)
         delay(reconnectDelay)
         reconnectDelay = min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS)
     }
@@ -351,12 +540,6 @@ class MainActivity : AppCompatActivity() {
     private suspend fun displayFrame(bitmap: Bitmap) {
         withContext(Dispatchers.Main) {
             videoView.setImageBitmap(bitmap)
-        }
-    }
-
-    private suspend fun updateConnectionStatus(status: String) {
-        withContext(Dispatchers.Main) {
-            connectionStatusText.text = status
         }
     }
 
@@ -375,17 +558,17 @@ class MainActivity : AppCompatActivity() {
     private suspend fun updateStatusUI(status: StatusResponse) {
         withContext(Dispatchers.Main) {
             // Update motion score
-            motionScoreText.text = "Motion: ${status.motion_score.toInt()}"
+            motionScoreText.text = status.motion_score.toInt().toString()
             
             // Update alarm status
             if (status.alarm_active) {
                 alarmStatusText.text = "⚠️ ALARM"
-                alarmStatusText.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_light))
+                alarmBadge.setBackgroundResource(R.drawable.badge_alarm)
                 alarmOverlay.visibility = View.VISIBLE
                 alarmSecondsText.text = "No movement for ${status.seconds_since_motion} seconds"
             } else {
                 alarmStatusText.text = "✓ OK"
-                alarmStatusText.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_green_light))
+                alarmBadge.setBackgroundResource(R.drawable.badge_success)
                 alarmOverlay.visibility = View.GONE
             }
         }
@@ -449,6 +632,26 @@ class MainActivity : AppCompatActivity() {
 
     // ==================== BACKGROUND SERVICE ====================
 
+    /**
+     * Auto-start the monitoring service when connecting to server.
+     * This ensures background monitoring is always active.
+     */
+    private fun autoStartMonitoringService() {
+        if (!MonitoringService.isRunning && hasNotificationPermission()) {
+            startMonitoringService()
+            Log.i(TAG, "Auto-started background monitoring service")
+        }
+    }
+
+    private fun hasNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
     private fun startMonitoringService() {
         if (serverUrl.isEmpty()) {
             val inputUrl = serverUrlInput.text.toString().trim()
@@ -487,13 +690,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateServiceStatus() {
         if (MonitoringService.isRunning) {
-            serviceStatusText.text = "🟢 Background monitoring active"
-            serviceStatusText.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
-            toggleServiceButton.text = "Stop Monitoring"
+            serviceStatusText.text = "Background Monitoring"
+            serviceIndicator.setBackgroundResource(R.drawable.status_indicator_active)
+            toggleServiceButton.text = "Stop"
         } else {
-            serviceStatusText.text = "⚪ Background monitoring inactive"
-            serviceStatusText.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
-            toggleServiceButton.text = "Start Background Monitoring"
+            serviceStatusText.text = "Background Monitoring"
+            serviceIndicator.setBackgroundResource(R.drawable.status_indicator_inactive)
+            toggleServiceButton.text = "Start"
         }
     }
 
@@ -531,13 +734,20 @@ class MainActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (controlsPanelVisible) {
-            toggleControlsPanel()
-        } else if (isConnected) {
-            stopStreaming()
-            showConnectionView()
-        } else {
-            super.onBackPressed()
+        when {
+            roiModeActive -> {
+                exitRoiMode()
+            }
+            controlsPanelVisible -> {
+                toggleControlsPanel()
+            }
+            isConnected -> {
+                stopStreaming()
+                showConnectionScreen()
+            }
+            else -> {
+                super.onBackPressed()
+            }
         }
     }
 }

@@ -1,383 +1,673 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@color/background_dark"
     tools:context=".MainActivity">
 
-    <!-- Top Bar -->
-    <LinearLayout
+    <!-- Connection Screen -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/connectionScreen"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="12dp"
-        android:background="@color/background_darker"
-        android:gravity="center_vertical">
+        android:layout_height="match_parent"
+        android:visibility="visible">
 
+        <!-- Decorative gradient background -->
+        <View
+            android:layout_width="300dp"
+            android:layout_height="300dp"
+            android:background="@drawable/gradient_blob_primary"
+            android:alpha="0.3"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:translationX="80dp"
+            android:translationY="-80dp" />
+
+        <View
+            android:layout_width="250dp"
+            android:layout_height="250dp"
+            android:background="@drawable/gradient_blob_secondary"
+            android:alpha="0.25"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            android:translationX="-60dp"
+            android:translationY="60dp" />
+
+        <!-- App Logo/Icon -->
+        <ImageView
+            android:id="@+id/appLogo"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:src="@drawable/ic_baby_monitor"
+            android:contentDescription="Baby Monitor"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="60dp"
+            app:tint="@color/accent_color" />
+
+        <!-- App Title -->
         <TextView
-            android:layout_width="0dp"
+            android:id="@+id/appTitle"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text="Baby Sleep Monitor"
             android:textColor="@color/white"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:textSize="28sp"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.02"
+            app:layout_constraintTop_toBottomOf="@id/appLogo"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="16dp" />
 
-        <ImageButton
+        <TextView
+            android:id="@+id/appSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Movement detection for peaceful nights"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            app:layout_constraintTop_toBottomOf="@id/appTitle"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="8dp" />
+
+        <!-- Connection Card (Glass effect) -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/connectionPanel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/glass_background"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="8dp"
+            app:layout_constraintTop_toBottomOf="@id/appSubtitle"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_margin="24dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🖥️ Connect to Server"
+                    android:textColor="@color/white"
+                    android:textSize="18sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Enter your baby monitor server address"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
+                    android:layout_marginBottom="20dp" />
+
+                <EditText
+                    android:id="@+id/serverUrlInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="http://192.168.1.100:5000"
+                    android:inputType="textUri"
+                    android:textColor="@color/white"
+                    android:textColorHint="@color/text_hint"
+                    android:background="@drawable/input_background"
+                    android:padding="16dp"
+                    android:textSize="15sp"
+                    android:layout_marginBottom="16dp" />
+
+                <Button
+                    android:id="@+id/connectButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:text="Connect"
+                    android:background="@drawable/button_primary_rounded"
+                    android:textColor="@color/background_dark"
+                    android:textSize="16sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.05"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Service Status Card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/servicePanel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/glass_background"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="8dp"
+            app:layout_constraintTop_toBottomOf="@id/connectionPanel"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginHorizontal="24dp"
+            android:layout_marginTop="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <View
+                        android:id="@+id/serviceIndicator"
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:background="@drawable/status_indicator_inactive" />
+
+                    <TextView
+                        android:id="@+id/serviceStatusText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Background Monitoring"
+                        android:textColor="@color/white"
+                        android:textSize="16sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:layout_marginStart="12dp" />
+
+                    <Button
+                        android:id="@+id/toggleServiceButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:text="Start"
+                        android:background="@drawable/button_outline"
+                        android:textColor="@color/accent_color"
+                        android:textSize="13sp"
+                        android:paddingHorizontal="20dp"
+                        android:stateListAnimator="@null" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Receive alarm notifications even when app is closed"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginTop="8dp" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Settings FAB -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/settingsButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_preferences"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_settings"
             android:contentDescription="Settings"
-            android:tint="@color/accent_color" />
-    </LinearLayout>
+            app:tint="@color/white"
+            app:backgroundTint="@color/glass_background"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_margin="24dp"
+            app:fabSize="normal"
+            app:elevation="8dp" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- Connection Panel (shown when not connected) -->
-    <LinearLayout
-        android:id="@+id/connectionPanel"
+    <!-- Video/Monitoring Screen -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/videoScreen"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp"
-        android:background="@color/card_background">
+        android:layout_height="match_parent"
+        android:visibility="gone">
 
-        <TextView
+        <!-- Video Container -->
+        <FrameLayout
+            android:id="@+id/videoContainer"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="🖥️ Server Connection"
-            android:textColor="@color/white"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="16dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Enter the IP address and port of your baby monitor server:"
-            android:textColor="@color/text_secondary"
-            android:textSize="14sp"
-            android:layout_marginBottom="12dp" />
-
-        <EditText
-            android:id="@+id/serverUrlInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="http://192.168.1.100:5000"
-            android:inputType="textUri"
-            android:textColor="@color/white"
-            android:textColorHint="@color/text_hint"
-            android:background="@drawable/edit_text_background"
-            android:padding="14dp"
-            android:textSize="16sp"
-            android:layout_marginBottom="16dp" />
-
-        <Button
-            android:id="@+id/connectButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Connect to Monitor"
-            android:background="@drawable/button_primary"
-            android:textColor="@color/white"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:padding="14dp" />
-    </LinearLayout>
-
-    <!-- Service Status Panel -->
-    <LinearLayout
-        android:id="@+id/servicePanel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp"
-        android:layout_marginTop="1dp"
-        android:background="@color/card_background">
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="📱 Background Monitoring"
-            android:textColor="@color/white"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="12dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Enable background monitoring to receive alarm notifications even when the app is closed or the screen is off."
-            android:textColor="@color/text_secondary"
-            android:textSize="13sp"
-            android:layout_marginBottom="12dp" />
-
-        <TextView
-            android:id="@+id/serviceStatusText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="⚪ Background monitoring inactive"
-            android:textColor="@color/text_secondary"
-            android:textSize="14sp"
-            android:layout_marginBottom="12dp" />
-
-        <Button
-            android:id="@+id/toggleServiceButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Start Background Monitoring"
-            android:background="@drawable/button_secondary"
-            android:textColor="@color/accent_color"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:padding="12dp" />
-    </LinearLayout>
-
-    <!-- Video Container (shown when connected) -->
-    <FrameLayout
-        android:id="@+id/videoContainer"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:visibility="gone"
-        android:background="#000000">
-
-        <!-- Native Video Display -->
-        <ImageView
-            android:id="@+id/videoView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="fitCenter"
+            android:layout_height="0dp"
             android:background="#000000"
-            android:contentDescription="Live video feed" />
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent">
 
-        <!-- Status Overlay (top-left) -->
+            <!-- Native Video Display -->
+            <ImageView
+                android:id="@+id/videoView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitCenter"
+                android:background="#000000"
+                android:contentDescription="Live video feed" />
+
+            <!-- ROI Selection Overlay (shown when in ROI mode) -->
+            <com.babysleepmonitor.ui.RoiSelectionView
+                android:id="@+id/roiSelectionView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone" />
+
+            <!-- Top Status Bar (Glass effect) -->
+            <LinearLayout
+                android:id="@+id/statusBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="12dp"
+                android:paddingTop="8dp"
+                android:background="@drawable/gradient_top_scrim">
+
+                <!-- Connection Status Badge -->
+                <LinearLayout
+                    android:id="@+id/connectionBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:paddingHorizontal="12dp"
+                    android:background="@drawable/badge_background">
+
+                    <View
+                        android:id="@+id/connectionIndicator"
+                        android:layout_width="8dp"
+                        android:layout_height="8dp"
+                        android:background="@drawable/status_dot_connecting" />
+
+                    <TextView
+                        android:id="@+id/connectionStatusText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Connecting"
+                        android:textColor="@color/white"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <!-- Alarm Status Badge -->
+                <LinearLayout
+                    android:id="@+id/alarmBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:paddingHorizontal="12dp"
+                    android:background="@drawable/badge_success">
+
+                    <TextView
+                        android:id="@+id/alarmStatusText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="✓ OK"
+                        android:textColor="@color/white"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif-medium" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Motion Score Overlay (Bottom Left) -->
+            <LinearLayout
+                android:id="@+id/motionOverlay"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="16dp"
+                android:padding="12dp"
+                android:orientation="vertical"
+                android:background="@drawable/glass_panel">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="MOTION"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10sp"
+                    android:letterSpacing="0.15"
+                    android:fontFamily="sans-serif-medium" />
+
+                <TextView
+                    android:id="@+id/motionScoreText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="--"
+                    android:textColor="@color/white"
+                    android:textSize="20sp"
+                    android:fontFamily="sans-serif-medium" />
+            </LinearLayout>
+
+            <!-- Alarm Overlay (Full Screen, Red) -->
+            <LinearLayout
+                android:id="@+id/alarmOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/alarm_overlay_background"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⚠️"
+                    android:textSize="72sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="NO MOVEMENT DETECTED"
+                    android:textColor="@color/white"
+                    android:textSize="24sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:gravity="center"
+                    android:layout_marginTop="24dp" />
+
+                <TextView
+                    android:id="@+id/alarmSecondsText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="No movement for 0 seconds"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    android:alpha="0.9"
+                    android:layout_marginTop="12dp" />
+            </LinearLayout>
+
+            <!-- ROI Mode Instructions (shown when in ROI selection mode) -->
+            <LinearLayout
+                android:id="@+id/roiInstructions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:layout_marginTop="60dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Drag to select detection zone"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:background="@drawable/glass_panel"
+                    android:padding="12dp" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <!-- FAB Container (Bottom Right) -->
         <LinearLayout
-            android:id="@+id/statusOverlay"
+            android:id="@+id/fabContainer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_gravity="top|start"
-            android:layout_margin="16dp"
-            android:padding="12dp"
-            android:background="@drawable/overlay_background">
+            android:gravity="center_horizontal"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_margin="20dp">
 
-            <TextView
-                android:id="@+id/connectionStatusText"
+            <!-- ROI FAB -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/roiButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="🔴 Connecting..."
-                android:textColor="@color/white"
-                android:textSize="13sp"
-                android:layout_marginBottom="4dp" />
+                android:src="@drawable/ic_crop"
+                android:contentDescription="Select detection zone"
+                app:tint="@color/white"
+                app:backgroundTint="@color/accent_secondary"
+                app:fabSize="normal"
+                app:elevation="6dp"
+                android:layout_marginBottom="12dp" />
 
-            <TextView
-                android:id="@+id/motionScoreText"
+            <!-- Controls FAB -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/toggleControlsButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Motion: --"
-                android:textColor="@color/white"
-                android:textSize="14sp"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/alarmStatusText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Status: OK"
-                android:textColor="#4CAF50"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:src="@drawable/ic_tune"
+                android:contentDescription="Enhancements"
+                app:tint="@color/white"
+                app:backgroundTint="@color/accent_color"
+                app:fabSize="normal"
+                app:elevation="6dp" />
         </LinearLayout>
 
-        <!-- Alarm Overlay (full screen, hidden by default) -->
+        <!-- ROI Action Buttons (shown in ROI mode) -->
         <LinearLayout
-            android:id="@+id/alarmOverlay"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:background="#CCFF0000"
-            android:visibility="gone">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="⚠️"
-                android:textSize="64sp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="ALARM: NO MOVEMENT DETECTED!"
-                android:textColor="@color/white"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:layout_marginTop="16dp" />
-
-            <TextView
-                android:id="@+id/alarmSecondsText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="No movement for 0 seconds"
-                android:textColor="@color/white"
-                android:textSize="16sp"
-                android:layout_marginTop="8dp" />
-        </LinearLayout>
-
-        <!-- Controls Toggle Button (bottom-right) -->
-        <ImageButton
-            android:id="@+id/toggleControlsButton"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_gravity="bottom|end"
-            android:layout_margin="16dp"
-            android:background="@drawable/fab_background"
-            android:src="@android:drawable/ic_menu_manage"
-            android:tint="@color/white"
-            android:contentDescription="Toggle controls"
-            android:elevation="6dp" />
-    </FrameLayout>
-
-    <!-- Controls Panel (collapsible, at bottom) -->
-    <LinearLayout
-        android:id="@+id/controlsPanel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp"
-        android:background="@color/card_background"
-        android:visibility="gone">
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="🎛️ Enhancements"
-            android:textColor="@color/white"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="12dp" />
-
-        <!-- Zoom Control -->
-        <LinearLayout
-            android:layout_width="match_parent"
+            android:id="@+id/roiActionBar"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="12dp">
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginBottom="32dp">
 
-            <TextView
-                android:layout_width="80dp"
-                android:layout_height="wrap_content"
-                android:text="Zoom"
-                android:textColor="@color/text_secondary"
-                android:textSize="14sp" />
-
-            <SeekBar
-                android:id="@+id/zoomSeekBar"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:min="0"
-                android:max="30"
-                android:progress="0"
-                android:progressTint="@color/accent_color"
-                android:thumbTint="@color/accent_color" />
-
-            <TextView
-                android:id="@+id/zoomValueText"
-                android:layout_width="50dp"
-                android:layout_height="wrap_content"
-                android:text="1.0x"
+            <Button
+                android:id="@+id/roiClearButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="Clear"
+                android:background="@drawable/button_outline"
                 android:textColor="@color/white"
                 android:textSize="14sp"
-                android:gravity="end" />
-        </LinearLayout>
+                android:paddingHorizontal="24dp"
+                android:layout_marginEnd="12dp"
+                android:stateListAnimator="@null" />
 
-        <!-- Contrast Control -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="12dp">
+            <Button
+                android:id="@+id/roiSaveButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="Save Zone"
+                android:background="@drawable/button_primary_rounded"
+                android:textColor="@color/background_dark"
+                android:textSize="14sp"
+                android:paddingHorizontal="24dp"
+                android:stateListAnimator="@null" />
 
-            <TextView
-                android:layout_width="80dp"
-                android:layout_height="wrap_content"
-                android:text="Contrast"
-                android:textColor="@color/text_secondary"
-                android:textSize="14sp" />
-
-            <SeekBar
-                android:id="@+id/contrastSeekBar"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:min="0"
-                android:max="20"
-                android:progress="0"
-                android:progressTint="@color/accent_color"
-                android:thumbTint="@color/accent_color" />
-
-            <TextView
-                android:id="@+id/contrastValueText"
-                android:layout_width="50dp"
-                android:layout_height="wrap_content"
-                android:text="1.0"
+            <Button
+                android:id="@+id/roiCancelButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="Cancel"
+                android:background="@drawable/button_outline"
                 android:textColor="@color/white"
                 android:textSize="14sp"
-                android:gravity="end" />
+                android:paddingHorizontal="24dp"
+                android:layout_marginStart="12dp"
+                android:stateListAnimator="@null" />
         </LinearLayout>
 
-        <!-- Brightness Control -->
-        <LinearLayout
+        <!-- Controls Panel (Bottom Sheet Style) -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/controlsPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="12dp">
+            app:cardBackgroundColor="@color/glass_background"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="16dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            android:visibility="gone"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginBottom="16dp">
 
-            <TextView
-                android:layout_width="80dp"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Brightness"
-                android:textColor="@color/text_secondary"
-                android:textSize="14sp" />
+                android:orientation="vertical"
+                android:padding="20dp">
 
-            <SeekBar
-                android:id="@+id/brightnessSeekBar"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:min="0"
-                android:max="100"
-                android:progress="50"
-                android:progressTint="@color/accent_color"
-                android:thumbTint="@color/accent_color" />
+                <!-- Handle bar -->
+                <View
+                    android:layout_width="40dp"
+                    android:layout_height="4dp"
+                    android:layout_gravity="center_horizontal"
+                    android:background="@drawable/handle_bar"
+                    android:layout_marginBottom="16dp" />
 
-            <TextView
-                android:id="@+id/brightnessValueText"
-                android:layout_width="50dp"
-                android:layout_height="wrap_content"
-                android:text="0"
-                android:textColor="@color/white"
-                android:textSize="14sp"
-                android:gravity="end" />
-        </LinearLayout>
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Enhancement Controls"
+                    android:textColor="@color/white"
+                    android:textSize="18sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:layout_marginBottom="20dp" />
 
-        <!-- Reset Button -->
-        <Button
-            android:id="@+id/resetEnhancementsButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Reset to Defaults"
-            android:background="@drawable/button_secondary"
-            android:textColor="@color/accent_color"
-            android:textSize="14sp"
-            android:padding="10dp" />
-    </LinearLayout>
+                <!-- Zoom Control -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginBottom="16dp">
 
-</LinearLayout>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="🔍 Zoom"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:id="@+id/zoomValueText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="1.0x"
+                            android:textColor="@color/accent_color"
+                            android:textSize="14sp"
+                            android:fontFamily="sans-serif-medium" />
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/zoomSeekBar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:min="0"
+                        android:max="30"
+                        android:progress="0"
+                        android:progressTint="@color/accent_color"
+                        android:thumbTint="@color/accent_color"
+                        android:layout_marginTop="8dp" />
+                </LinearLayout>
+
+                <!-- Contrast Control -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginBottom="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="◐ Contrast"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:id="@+id/contrastValueText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="1.0"
+                            android:textColor="@color/accent_color"
+                            android:textSize="14sp"
+                            android:fontFamily="sans-serif-medium" />
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/contrastSeekBar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:min="0"
+                        android:max="20"
+                        android:progress="0"
+                        android:progressTint="@color/accent_color"
+                        android:thumbTint="@color/accent_color"
+                        android:layout_marginTop="8dp" />
+                </LinearLayout>
+
+                <!-- Brightness Control -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginBottom="20dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="☀️ Brightness"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:id="@+id/brightnessValueText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0"
+                            android:textColor="@color/accent_color"
+                            android:textSize="14sp"
+                            android:fontFamily="sans-serif-medium" />
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/brightnessSeekBar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:min="0"
+                        android:max="100"
+                        android:progress="50"
+                        android:progressTint="@color/accent_color"
+                        android:thumbTint="@color/accent_color"
+                        android:layout_marginTop="8dp" />
+                </LinearLayout>
+
+                <!-- Reset Button -->
+                <Button
+                    android:id="@+id/resetEnhancementsButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Reset to Defaults"
+                    android:background="@drawable/button_outline"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

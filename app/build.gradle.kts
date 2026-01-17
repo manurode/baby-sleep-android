@@ -45,4 +45,6 @@ dependencies {
     implementation(libs.material)
     implementation(libs.okhttp)
     implementation(libs.gson)
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.cardview:cardview:1.0.0")
 }

@@ -159,6 +159,69 @@ object ApiClient {
     }
     
     /**
+     * Set the Region of Interest for motion detection.
+     * Coordinates should be normalized (0.0 to 1.0).
+     * 
+     * @param baseUrl Server base URL
+     * @param x X coordinate of ROI (0.0-1.0)
+     * @param y Y coordinate of ROI (0.0-1.0)
+     * @param w Width of ROI (0.0-1.0)
+     * @param h Height of ROI (0.0-1.0)
+     * @return true if successful
+     */
+    suspend fun setRoi(
+        baseUrl: String,
+        x: Float,
+        y: Float,
+        w: Float,
+        h: Float
+    ): Boolean = withContext(Dispatchers.IO) {
+        val url = normalizeUrl(baseUrl, "/set_roi")
+        
+        val jsonMap = mapOf(
+            "x" to x,
+            "y" to y,
+            "w" to w,
+            "h" to h
+        )
+        
+        val jsonBody = gson.toJson(jsonMap)
+        val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
+        
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .build()
+        
+        val response = httpClient.newCall(request).execute()
+        val success = response.isSuccessful
+        response.close()
+        
+        success
+    }
+    
+    /**
+     * Reset/clear the Region of Interest.
+     * 
+     * @param baseUrl Server base URL
+     * @return true if successful
+     */
+    suspend fun resetRoi(baseUrl: String): Boolean = withContext(Dispatchers.IO) {
+        val url = normalizeUrl(baseUrl, "/reset_roi")
+        
+        val request = Request.Builder()
+            .url(url)
+            .post("".toRequestBody())
+            .build()
+        
+        val response = httpClient.newCall(request).execute()
+        val success = response.isSuccessful
+        response.close()
+        
+        success
+    }
+    
+    /**
      * Normalize URL to ensure proper format.
      */
     private fun normalizeUrl(baseUrl: String, endpoint: String): String {
