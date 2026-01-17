@@ -1,0 +1,33 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Baby icon representation -->
+    <group android:translateX="27" android:translateY="27">
+        <!-- Baby face circle -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M27,27m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0"/>
+        <!-- Eyes -->
+        <path
+            android:fillColor="#0F0F1A"
+            android:pathData="M18,22m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0"/>
+        <path
+            android:fillColor="#0F0F1A"
+            android:pathData="M36,22m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0"/>
+        <!-- Sleeping mouth (curved line) -->
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="#0F0F1A"
+            android:strokeWidth="2"
+            android:pathData="M20,34 Q27,40 34,34"/>
+        <!-- Z letters for sleeping -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M42,8 L48,8 L42,14 L48,14"/>
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M46,2 L51,2 L46,7 L51,7"/>
+    </group>
+</vector>
