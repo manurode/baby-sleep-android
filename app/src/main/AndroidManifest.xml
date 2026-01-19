@@ -22,9 +22,9 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
         
-        <!-- Main Activity -->
+        <!-- Welcome/Onboarding Activity (Launcher) -->
         <activity
-            android:name=".MainActivity"
+            android:name=".WelcomeActivity"
             android:exported="true"
             android:theme="@style/Theme.BabySleepMonitor">
             <intent-filter>
@@ -32,6 +32,36 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        
+        <!-- Server Setup Activity -->
+        <activity
+            android:name=".ServerSetupActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BabySleepMonitor" />
+        
+        <!-- Connection Error Activity -->
+        <activity
+            android:name=".ConnectionErrorActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BabySleepMonitor" />
+        
+        <!-- Main Monitor Activity -->
+        <activity
+            android:name=".MonitorActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BabySleepMonitor" />
+        
+        <!-- Detection Zone Activity -->
+        <activity
+            android:name=".DetectionZoneActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BabySleepMonitor" />
+        
+        <!-- Legacy Main Activity (kept for compatibility) -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BabySleepMonitor" />
         
         <!-- Settings Activity -->
         <activity

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Server Setup Screen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#00dcb4", // Extracted teal color from the screenshots
+                        "primary-dark": "#00b594",
+                        "background-light": "#F3F4F6", // Light gray for light mode
+                        "background-dark": "#0B0C10", // Very dark mostly black for dark mode
+                        "card-light": "#FFFFFF",
+                        "card-dark": "#16181f", // Dark blue/gray from the modal background in screenshot
+                        "text-light": "#1F2937",
+                        "text-dark": "#E5E7EB",
+                        "text-muted-light": "#6B7280",
+                        "text-muted-dark": "#9CA3AF",
+                    },
+                    fontFamily: {
+                        display: ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.75rem", // 12px
+                        xl: "1rem", // 16px
+                        "2xl": "1.5rem", // 24px
+                        "3xl": "2rem", // 32px
+                    },
+                    boxShadow: {
+                        'glow': '0 0 20px rgba(0, 220, 180, 0.15)',
+                    }
+                },
+            },
+        };
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased min-h-screen flex flex-col items-center justify-center relative overflow-hidden transition-colors duration-300">
+<div class="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+<div class="absolute -top-32 -left-32 w-96 h-96 bg-primary/10 dark:bg-primary/5 rounded-full blur-3xl"></div>
+<div class="absolute top-1/2 -right-32 w-80 h-80 bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-3xl"></div>
+</div>
+<main class="w-full max-w-md px-6 py-8 flex flex-col h-full justify-between">
+<div class="flex flex-col items-center mt-10 mb-8 space-y-4">
+<div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-blue-500 flex items-center justify-center shadow-lg shadow-primary/20">
+<span class="material-icons-round text-4xl text-white">dns</span>
+</div>
+<h1 class="text-2xl font-bold text-text-light dark:text-text-dark tracking-tight text-center">
+                Connect to Server
+            </h1>
+<p class="text-text-muted-light dark:text-text-muted-dark text-center text-sm max-w-xs mx-auto">
+                Enter your dedicated server IP address to establish a secure connection for real-time monitoring.
+            </p>
+</div>
+<div class="w-full space-y-6">
+<div class="relative group">
+<label class="block text-sm font-medium text-text-muted-light dark:text-text-muted-dark mb-2 ml-1" for="ip-address">
+                    Server IP Address
+                </label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="material-icons-round text-text-muted-light dark:text-text-muted-dark group-focus-within:text-primary transition-colors">wifi_tethering</span>
+</div>
+<input class="block w-full pl-12 pr-4 py-4 bg-card-light dark:bg-card-dark border-transparent focus:border-primary focus:ring-primary rounded-xl text-text-light dark:text-text-dark placeholder-gray-400 dark:placeholder-gray-600 shadow-sm ring-1 ring-gray-200 dark:ring-gray-800 transition-all text-lg font-mono tracking-wide" id="ip-address" name="ip-address" placeholder="192.168.1.100" type="text" value=""/>
+<div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none opacity-0">
+<span class="material-icons-round text-green-500">check_circle</span>
+</div>
+</div>
+<p class="mt-2 text-xs text-text-muted-light dark:text-text-muted-dark ml-1">
+                    Usually found in your router settings or server dashboard.
+                </p>
+</div>
+<div class="relative group">
+<label class="block text-sm font-medium text-text-muted-light dark:text-text-muted-dark mb-2 ml-1" for="port">
+                    Port <span class="text-xs text-gray-400 font-normal">(Optional)</span>
+</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="material-icons-round text-text-muted-light dark:text-text-muted-dark group-focus-within:text-primary transition-colors">settings_ethernet</span>
+</div>
+<input class="block w-full pl-12 pr-4 py-4 bg-card-light dark:bg-card-dark border-transparent focus:border-primary focus:ring-primary rounded-xl text-text-light dark:text-text-dark placeholder-gray-400 dark:placeholder-gray-600 shadow-sm ring-1 ring-gray-200 dark:ring-gray-800 transition-all text-lg font-mono tracking-wide" id="port" name="port" placeholder="8080" type="text"/>
+</div>
+</div>
+<div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 flex items-start space-x-3 border border-blue-100 dark:border-blue-800/30">
+<span class="material-icons-round text-blue-500 mt-0.5">info</span>
+<div class="flex-1">
+<p class="text-sm font-medium text-blue-800 dark:text-blue-300">Need Help?</p>
+<p class="text-xs text-blue-600 dark:text-blue-400 mt-1">Make sure your device is on the same Wi-Fi network as your server.</p>
+</div>
+</div>
+</div>
+<div class="w-full mt-auto pt-8 space-y-4">
+<button class="w-full bg-primary hover:bg-primary-dark text-white font-semibold py-4 px-6 rounded-3xl shadow-glow transform transition-all active:scale-[0.98] flex items-center justify-center space-x-2">
+<span>Start Monitoring</span>
+<span class="material-icons-round text-white">arrow_forward</span>
+</button>
+<button class="w-full bg-transparent hover:bg-gray-100 dark:hover:bg-white/5 text-text-muted-light dark:text-text-muted-dark font-medium py-3 px-6 rounded-3xl transition-colors text-sm">
+                Cancel
+            </button>
+</div>
+</main>
+<div class="w-full h-8 shrink-0"></div>
+
+</body></html>

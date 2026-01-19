@@ -43,6 +43,15 @@ class MonitoringService : Service() {
         @Volatile
         var isRunning = false
             private set
+        
+        /**
+         * Stops the alarm sound and cancels the alarm notification.
+         * Called from the connection lost dialog when user acknowledges.
+         */
+        fun stopAlarmSound(context: Context) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(NOTIFICATION_ID_ALARM)
+        }
     }
 
     private lateinit var httpClient: OkHttpClient
@@ -161,7 +170,7 @@ class MonitoringService : Service() {
     }
 
     private fun createServiceNotification(): Notification {
-        val openAppIntent = Intent(this, MainActivity::class.java)
+        val openAppIntent = Intent(this, MonitorActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, openAppIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -220,7 +229,7 @@ class MonitoringService : Service() {
     }
 
     private fun showAlarmNotification(secondsSinceMotion: Int) {
-        val openAppIntent = Intent(this, MainActivity::class.java)
+        val openAppIntent = Intent(this, MonitorActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, openAppIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

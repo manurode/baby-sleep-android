@@ -1,3 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App Name -->
     <string name="app_name">Baby Sleep Monitor</string>
+    
+    <!-- Welcome Screen -->
+    <string name="welcome_title_1">Watch over your</string>
+    <string name="welcome_title_2">little one</string>
+    <string name="welcome_description">Experience peace of mind with real-time HD video monitoring and instant movement alerts directly on your phone.</string>
+    <string name="get_started">Get Started</string>
+    
+    <!-- Server Setup Screen -->
+    <string name="connect_to_server">Connect to Server</string>
+    <string name="server_setup_description">Enter your dedicated server IP address to establish a secure connection for real-time monitoring.</string>
+    <string name="server_ip_address">Server IP Address</string>
+    <string name="port_optional">Port (Optional)</string>
+    <string name="ip_hint">192.168.1.100</string>
+    <string name="port_hint">5000</string>
+    <string name="ip_helper_text">Usually found in your router settings or server dashboard.</string>
+    <string name="need_help">Need Help?</string>
+    <string name="wifi_same_network_hint">Make sure your device is on the same Wi-Fi network as your server.</string>
+    <string name="start_monitoring">Start Monitoring</string>
+    <string name="cancel">Cancel</string>
+    <string name="connecting">Connecting…</string>
+    
+    <!-- Connection Error Screen -->
+    <string name="connection_error">Connection Error</string>
+    <string name="connection_error_description">Could not establish a connection to the server. Please check your IP configuration and try again.</string>
+    <string name="status_details">STATUS DETAILS</string>
+    <string name="error_code">Error Code:</string>
+    <string name="target_ip">Target IP:</string>
+    <string name="try_again">Try Again</string>
+    <string name="check_network_settings">Check Network Settings</string>
+    
+    <!-- Connection Lost Dialog -->
+    <string name="connection_lost">Connection Lost!</string>
+    <string name="lost_signal">We lost signal with the camera.</string>
+    <string name="not_being_monitored">Your baby is NOT being monitored.</string>
+    <string name="connection_lost_hint">Please check your Wi-Fi settings or move closer to the nursery unit.</string>
+    <string name="understood">UNDERSTOOD</string>
+    <string name="try_reconnecting">Try Reconnecting</string>
+    
+    <!-- Monitor Screen -->
+    <string name="babys_room">Baby\'s Room</string>
+    <string name="connected">Connected</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="reconnecting">Reconnecting…</string>
+    <string name="live">LIVE</string>
+    <string name="hd">HD</string>
+    <string name="motion_detected">Motion Detected</string>
+    <string name="no_motion">No Motion</string>
+    <string name="movement_sensed">Movement sensed just now</string>
+    <string name="last_movement">Last movement %ds ago</string>
+    <string name="quiet">Quiet</string>
+    <string name="enhancement">Enhancement</string>
+    <string name="enhancement_description">Adjust brightness &amp; night vision</string>
+    <string name="detection_area">Detection Area</string>
+    <string name="detection_area_description">Set specific ROI zones</string>
+    
+    <!-- Enhancement Controls -->
+    <string name="enhancement_controls">Enhancement Controls</string>
+    <string name="zoom">Zoom</string>
+    <string name="contrast">Contrast</string>
+    <string name="brightness">Brightness</string>
+    <string name="reset_to_default">Reset to Default</string>
+    <string name="settings_reset">Settings reset</string>
+    
+    <!-- Detection Zone Screen -->
+    <string name="detection_zone">Detection Zone</string>
+    <string name="drag_corners_instruction">Drag the corners to adjust the monitoring area.</string>
+    <string name="clear">Clear</string>
+    <string name="save_zone">Save Zone</string>
+    <string name="detection_zone_saved">Detection zone saved</string>
+    <string name="detection_zone_cleared">Detection zone cleared</string>
+    <string name="draw_zone_first">Please draw a detection zone first</string>
+    <string name="failed_to_save_zone">Failed to save zone</string>
+    <string name="error_saving_zone">Error saving zone</string>
+    
+    <!-- Alarm -->
+    <string name="no_movement_detected">NO MOVEMENT DETECTED</string>
+    <string name="no_movement_for">No movement for %d seconds</string>
+    <string name="alarm_title">⚠️ ALARM: NO MOVEMENT DETECTED!</string>
+    <string name="alarm_message">No movement for %d seconds. Check on baby immediately!</string>
+    
+    <!-- Background Service -->
+    <string name="baby_monitor_active">Baby Monitor Active</string>
+    <string name="monitoring_for_movement">Monitoring for movement…</string>
+    <string name="background_monitoring">Background Monitoring</string>
+    <string name="background_monitoring_description">Receive alarm notifications even when app is closed</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    
+    <!-- General -->
+    <string name="settings">Settings</string>
+    <string name="ok">OK</string>
+    <string name="error">Error</string>
+    <string name="loading">Loading…</string>
+    <string name="failed_to_update_settings">Failed to update settings</string>
+    <string name="server_url_not_found">Server URL not found</string>
 </resources>

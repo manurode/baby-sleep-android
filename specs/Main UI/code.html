@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Main Monitor View</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#14CBA8", // Teal color from context
+              "background-light": "#F3F4F6", // Soft gray
+              "background-dark": "#111827", // Dark gray/black
+              "card-light": "#FFFFFF",
+              "card-dark": "#1F2937", 
+            },
+            fontFamily: {
+              display: ["Inter", "sans-serif"],
+            },
+            borderRadius: {
+              DEFAULT: "1rem",
+              xl: "1.5rem",
+              "2xl": "2rem",
+              "3xl": "2.5rem",
+            },
+          },
+        },
+      };
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+          min-height: max(884px, 100dvh);
+        }.no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark text-gray-900 dark:text-white min-h-screen flex flex-col antialiased transition-colors duration-300">
+<div class="px-6 pt-5 pb-2 flex justify-between items-center text-xs font-medium text-gray-500 dark:text-gray-400 z-20">
+<span>9:41</span>
+<div class="flex items-center space-x-1">
+<span class="material-symbols-outlined text-sm" style="font-size: 18px;">signal_cellular_alt</span>
+<span class="material-symbols-outlined text-sm" style="font-size: 18px;">wifi</span>
+<span class="material-symbols-outlined text-sm" style="font-size: 18px;">battery_full</span>
+</div>
+</div>
+<header class="px-6 py-4 flex justify-between items-center z-20">
+<div>
+<h1 class="text-2xl font-bold text-gray-900 dark:text-white">Baby's Room</h1>
+<p class="text-xs text-green-500 font-medium flex items-center mt-0.5">
+<span class="w-2 h-2 rounded-full bg-green-500 mr-1.5"></span>
+                Connected
+            </p>
+</div>
+<button class="p-2 rounded-full bg-white dark:bg-card-dark shadow-sm text-gray-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</header>
+<main class="flex-1 flex flex-col px-6 relative overflow-y-auto no-scrollbar pb-8">
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary opacity-10 blur-3xl rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+<div class="absolute bottom-40 left-0 w-72 h-72 bg-blue-400 opacity-10 dark:opacity-5 blur-3xl rounded-full translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
+<div class="relative w-full aspect-[4/5] bg-gray-200 dark:bg-gray-800 rounded-3xl overflow-hidden shadow-2xl shadow-primary/10 mb-6 z-10 group">
+<img alt="Live baby monitor feed" class="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuApz6BxJiGbjNH_PDPyijWhtuVN2CarDgGMRDUaZGpAh-nVaXwjkuoQqYMyyYO7qtPwylzcoog0M79XMLnOUKv4npaWUCo4sRZVqd3ScUxwBQLzML9C18QAc5KeOIzG0XNDhHG7c0BVIap-3aV3PRszWC7tvAKzIR6l3mBpc_4wj8kVwH48aNfUTNqMyzCdszr4OmK0fELTFfYX4EndMcrJDdaIdTc1-pgBOMFCKLngAIDTFIn5SUnDmIOUj-fn--yysyB6u_cWAqRC"/>
+<div class="absolute top-4 left-4 bg-red-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center shadow-sm border border-red-400/20">
+<span class="w-1.5 h-1.5 bg-white rounded-full mr-1.5 animate-pulse"></span>
+                LIVE
+            </div>
+<div class="absolute top-4 right-4 flex space-x-2">
+<div class="bg-black/30 backdrop-blur-md px-2 py-1 rounded-lg flex items-center border border-white/10">
+<span class="material-symbols-outlined text-white text-sm">wifi</span>
+<span class="text-white text-[10px] ml-1 font-medium">HD</span>
+</div>
+</div>
+<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-6 pt-12">
+<div class="flex justify-between items-end text-white">
+<div>
+<div class="text-sm font-medium opacity-90">24°C • 55% Humidity</div>
+</div>
+<button class="bg-white/20 hover:bg-white/30 backdrop-blur-md p-2 rounded-full transition-colors">
+<span class="material-symbols-outlined text-white">fullscreen</span>
+</button>
+</div>
+</div>
+</div>
+<div class="mb-8 flex items-center justify-between bg-white dark:bg-card-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 z-10">
+<div class="flex items-center">
+<div class="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500 mr-3">
+<span class="material-symbols-outlined">motion_sensor_active</span>
+</div>
+<div>
+<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Motion Detected</h3>
+<p class="text-xs text-gray-500 dark:text-gray-400">Movement sensed 2m ago</p>
+</div>
+</div>
+<div class="h-8 w-[1px] bg-gray-200 dark:bg-gray-700 mx-2"></div>
+<div class="flex items-center text-gray-400">
+<span class="material-symbols-outlined text-gray-400 mr-1">mic_off</span>
+<span class="text-xs font-medium">Quiet</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 z-10">
+<button class="bg-white dark:bg-card-dark p-5 rounded-2xl shadow-lg shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-800 flex flex-col items-start gap-3 hover:border-primary/50 transition-all active:scale-95 group text-left">
+<div class="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:bg-purple-100 dark:group-hover:bg-purple-900/40 transition-colors">
+<span class="material-symbols-outlined">tune</span>
+</div>
+<div>
+<span class="block font-semibold text-gray-900 dark:text-white text-sm mb-0.5">Enhancement</span>
+<span class="block text-xs text-gray-500 dark:text-gray-400 leading-tight">Adjust brightness &amp; night vision</span>
+</div>
+</button>
+<button class="bg-white dark:bg-card-dark p-5 rounded-2xl shadow-lg shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-800 flex flex-col items-start gap-3 hover:border-primary/50 transition-all active:scale-95 group text-left">
+<div class="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center group-hover:bg-orange-100 dark:group-hover:bg-orange-900/40 transition-colors">
+<span class="material-symbols-outlined">crop_free</span>
+</div>
+<div>
+<span class="block font-semibold text-gray-900 dark:text-white text-sm mb-0.5">Detection Area</span>
+<span class="block text-xs text-gray-500 dark:text-gray-400 leading-tight">Set specific ROI zones</span>
+</div>
+</button>
+</div>
+<div class="mt-6 flex justify-center z-10 pb-4">
+<button class="flex items-center space-x-2 px-6 py-3 bg-primary text-white rounded-full shadow-lg shadow-primary/30 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[20px]">mic</span>
+<span class="text-sm font-semibold">Hold to Speak</span>
+</button>
+</div>
+</main>
+<div class="pb-2 pt-2 bg-background-light dark:bg-background-dark z-20">
+<div class="h-1 w-1/3 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto"></div>
+</div>
+
+</body></html>

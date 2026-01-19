@@ -1,27 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Background Colors -->
-    <color name="background_dark">#0A0A14</color>
-    <color name="background_darker">#06060C</color>
-    <color name="card_background">#14142A</color>
+    <!-- Primary Colors (Teal) -->
+    <color name="primary">#14CBA8</color>
+    <color name="primary_dark">#00B594</color>
+    <color name="primary_light">#4DDCC4</color>
+    
+    <!-- Background Colors (Light Theme) -->
+    <color name="background_light">#F3F4F6</color>
+    <color name="background_dark">#111827</color>
+    <color name="card_light">#FFFFFF</color>
+    <color name="card_dark">#1F2937</color>
     <color name="glass_background">#1A1A2E</color>
     
-    <!-- Accent Colors -->
-    <color name="accent_color">#00D4AA</color>
+    <!-- Legacy compatibility -->
+    <color name="accent_color">#14CBA8</color>
     <color name="accent_secondary">#6C63FF</color>
     
     <!-- Status Colors -->
-    <color name="danger_color">#FF4757</color>
-    <color name="success_color">#2ED573</color>
-    <color name="warning_color">#FFA502</color>
+    <color name="danger_color">#EF4444</color>
+    <color name="danger_light">#FEF2F2</color>
+    <color name="danger_dark">#450A0A</color>
+    <color name="success_color">#22C55E</color>
+    <color name="warning_color">#F59E0B</color>
+    <color name="info_color">#3B82F6</color>
     
     <!-- Text Colors -->
     <color name="white">#FFFFFF</color>
-    <color name="text_secondary">#8E8EA0</color>
-    <color name="text_hint">#4A4A5C</color>
-    <color name="black">#FF000000</color>
+    <color name="black">#000000</color>
+    <color name="text_primary">#1F2937</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="text_tertiary">#9CA3AF</color>
+    <color name="text_hint">#9CA3AF</color>
+    
+    <!-- UI Element Colors -->
+    <color name="purple_icon">#9333EA</color>
+    <color name="purple_bg">#F3E8FF</color>
+    <color name="orange_icon">#EA580C</color>
+    <color name="orange_bg">#FFF7ED</color>
+    <color name="blue_icon">#2563EB</color>
+    <color name="blue_bg">#EFF6FF</color>
     
     <!-- Overlay Colors -->
     <color name="overlay_dark">#CC000000</color>
     <color name="overlay_light">#40000000</color>
+    <color name="scrim">#80000000</color>
+    
+    <!-- Border Colors -->
+    <color name="border_light">#E5E7EB</color>
+    <color name="border_dark">#374151</color>
+    
+    <!-- Slider/Seekbar -->
+    <color name="slider_track">#E5E7EB</color>
+    <color name="slider_thumb">#14CBA8</color>
 </resources>
