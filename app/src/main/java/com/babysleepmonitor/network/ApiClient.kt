@@ -1,6 +1,7 @@
 package com.babysleepmonitor.network
 
 import com.babysleepmonitor.data.SettingsResponse
+import com.babysleepmonitor.data.SleepStatsResponse
 import com.babysleepmonitor.data.StatusResponse
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +72,30 @@ object ApiClient {
         response.close()
         
         gson.fromJson(body, StatusResponse::class.java)
+    }
+    
+    /**
+     * Get current sleep monitoring statistics.
+     * 
+     * @param baseUrl Server base URL
+     * @return SleepStatsResponse with sleep metrics and state
+     */
+    suspend fun getSleepStats(baseUrl: String): SleepStatsResponse = withContext(Dispatchers.IO) {
+        val url = normalizeUrl(baseUrl, "/sleep_stats")
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+        
+        val response = httpClient.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw IOException("Sleep stats request failed: ${response.code}")
+        }
+        
+        val body = response.body?.string() ?: throw IOException("Empty response body")
+        response.close()
+        
+        gson.fromJson(body, SleepStatsResponse::class.java)
     }
     
     /**

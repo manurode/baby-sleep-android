@@ -52,4 +52,9 @@
     <!-- Slider/Seekbar -->
     <color name="slider_track">#E5E7EB</color>
     <color name="slider_thumb">#14CBA8</color>
+    
+    <!-- Sleep Stats Bottom Sheet -->
+    <color name="surface">#1F2937</color>
+    <color name="divider">#374151</color>
+    <color name="colorAccent">#14CBA8</color>
 </resources>

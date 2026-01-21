@@ -23,6 +23,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.babysleepmonitor.data.SleepStatsResponse
 import com.babysleepmonitor.data.StatusResponse
 import com.babysleepmonitor.network.ApiClient
 import com.babysleepmonitor.network.MjpegInputStream
@@ -48,6 +49,7 @@ class MonitorActivity : AppCompatActivity() {
         private const val INITIAL_RECONNECT_DELAY_MS = 1000L
         private const val MAX_RECONNECT_DELAY_MS = 30000L
         private const val STATUS_POLL_INTERVAL_MS = 1500L
+        private const val SLEEP_STATS_POLL_INTERVAL_MS = 5000L
     }
 
     // Views
@@ -83,12 +85,30 @@ class MonitorActivity : AppCompatActivity() {
     
     // Stop monitoring button
     private var stopMonitoringButton: Button? = null
+    
+    // Sleep Stats card and bottom sheet
+    private lateinit var sleepStatsCard: LinearLayout
+    private lateinit var sleepStatsPreview: TextView
+    private lateinit var sleepStateEmoji: TextView
+    private lateinit var sleepStateLabel: TextView
+    private lateinit var sleepStatsBottomSheet: FrameLayout
+    private lateinit var sleepSheetEmoji: TextView
+    private lateinit var sleepSheetState: TextView
+    private lateinit var breathingIndicatorSheet: View
+    private lateinit var closeSleepStatsButton: ImageView
+    private lateinit var totalSleepTimeSheet: TextView
+    private lateinit var wakeUpsSheet: TextView
+    private lateinit var sleepQualitySheet: TextView
+    private lateinit var sessionDurationSheet: TextView
+    private lateinit var motionScoreSheet: TextView
+    private lateinit var lastBreathSheet: TextView
 
     // State
     private var serverUrl: String = ""
     private var reconnectDelay = INITIAL_RECONNECT_DELAY_MS
     private var roiModeActive = false
     private var enhancementPanelVisible = false
+    private var sleepStatsPanelVisible = false
     private var connectionLostDialogShown = false
     private var connectionRetryCount = 0
     private val MAX_RETRIES_BEFORE_DIALOG = 2
@@ -102,6 +122,7 @@ class MonitorActivity : AppCompatActivity() {
     // Coroutine jobs
     private var videoStreamJob: Job? = null
     private var statusPollJob: Job? = null
+    private var sleepStatsPollJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -189,6 +210,23 @@ class MonitorActivity : AppCompatActivity() {
         
         // Stop monitoring button (optional - may not exist in all layouts)
         stopMonitoringButton = findViewById(R.id.stopMonitoringButton)
+        
+        // Sleep Stats views
+        sleepStatsCard = findViewById(R.id.sleepStatsCard)
+        sleepStatsPreview = findViewById(R.id.sleepStatsPreview)
+        sleepStateEmoji = findViewById(R.id.sleepStateEmoji)
+        sleepStateLabel = findViewById(R.id.sleepStateLabel)
+        sleepStatsBottomSheet = findViewById(R.id.sleepStatsBottomSheet)
+        sleepSheetEmoji = findViewById(R.id.sleepSheetEmoji)
+        sleepSheetState = findViewById(R.id.sleepSheetState)
+        breathingIndicatorSheet = findViewById(R.id.breathingIndicatorSheet)
+        closeSleepStatsButton = findViewById(R.id.closeSleepStatsButton)
+        totalSleepTimeSheet = findViewById(R.id.totalSleepTimeSheet)
+        wakeUpsSheet = findViewById(R.id.wakeUpsSheet)
+        sleepQualitySheet = findViewById(R.id.sleepQualitySheet)
+        sessionDurationSheet = findViewById(R.id.sessionDurationSheet)
+        motionScoreSheet = findViewById(R.id.motionScoreSheet)
+        lastBreathSheet = findViewById(R.id.lastBreathSheet)
     }
 
     private fun setupListeners() {
@@ -216,7 +254,12 @@ class MonitorActivity : AppCompatActivity() {
 
         // Scrim
         scrim.setOnClickListener {
-            hideEnhancementPanel()
+            if (sleepStatsPanelVisible) {
+                hideSleepStatsPanel()
+            }
+            if (enhancementPanelVisible) {
+                hideEnhancementPanel()
+            }
         }
 
         // ROI action buttons
@@ -248,6 +291,16 @@ class MonitorActivity : AppCompatActivity() {
         // Stop monitoring button
         stopMonitoringButton?.setOnClickListener {
             stopMonitoringAndNavigate()
+        }
+        
+        // Sleep Stats card
+        sleepStatsCard.setOnClickListener {
+            showSleepStatsPanel()
+        }
+        
+        // Close sleep stats button
+        closeSleepStatsButton.setOnClickListener {
+            hideSleepStatsPanel()
         }
     }
 
@@ -357,6 +410,89 @@ class MonitorActivity : AppCompatActivity() {
                 Log.e(TAG, "Failed to reset enhancements: ${e.message}")
             }
         }
+    }
+
+    // ==================== SLEEP STATS PANEL ====================
+
+    private fun showSleepStatsPanel() {
+        sleepStatsPanelVisible = true
+        sleepStatsBottomSheet.visibility = View.VISIBLE
+        scrim.visibility = View.VISIBLE
+        
+        // Start polling sleep stats
+        startSleepStatsPoll()
+        
+        // Load immediately
+        loadSleepStats()
+    }
+
+    private fun hideSleepStatsPanel() {
+        sleepStatsPanelVisible = false
+        sleepStatsBottomSheet.visibility = View.GONE
+        if (!enhancementPanelVisible) {
+            scrim.visibility = View.GONE
+        }
+        
+        // Stop polling when panel is hidden
+        sleepStatsPollJob?.cancel()
+        sleepStatsPollJob = null
+    }
+
+    private fun startSleepStatsPoll() {
+        sleepStatsPollJob?.cancel()
+        sleepStatsPollJob = lifecycleScope.launch {
+            while (isActive) {
+                loadSleepStats()
+                delay(SLEEP_STATS_POLL_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun loadSleepStats() {
+        lifecycleScope.launch {
+            try {
+                val stats = ApiClient.getSleepStats(serverUrl)
+                withContext(Dispatchers.Main) {
+                    updateSleepStatsUI(stats)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load sleep stats: ${e.message}")
+            }
+        }
+    }
+
+    private fun updateSleepStatsUI(stats: SleepStatsResponse) {
+        // Update card preview
+        sleepStateEmoji.text = stats.getStateEmoji()
+        sleepStateLabel.text = stats.getStateDisplayName()
+        
+        val previewText = when {
+            stats.total_sleep_minutes > 0 -> "Sleep: ${stats.getFormattedSleepTime()} • ${stats.wake_ups} wake-ups"
+            else -> "Tap to view sleep quality metrics"
+        }
+        sleepStatsPreview.text = previewText
+        
+        // Update bottom sheet
+        sleepSheetEmoji.text = stats.getStateEmoji()
+        sleepSheetState.text = stats.getStateDisplayName()
+        
+        // Breathing indicator
+        val breathingDrawable = if (stats.breathing_detected) {
+            R.drawable.breathing_indicator_on
+        } else {
+            R.drawable.breathing_indicator_off
+        }
+        breathingIndicatorSheet.setBackgroundResource(breathingDrawable)
+        
+        // Stats values
+        totalSleepTimeSheet.text = stats.getFormattedSleepTime()
+        wakeUpsSheet.text = stats.wake_ups.toString()
+        sleepQualitySheet.text = "${stats.breathing_quality_percent}%"
+        sessionDurationSheet.text = stats.getFormattedSessionTime()
+        
+        // Debug info - show mean motion and rhythmic detection
+        motionScoreSheet.text = String.format("%.0f (±%.0f)", stats.motion_mean, stats.motion_std)
+        lastBreathSheet.text = if (stats.breathing_detected) "now" else "${stats.state_duration_seconds}s ago"
     }
 
     // ==================== ROI ====================
@@ -715,6 +851,9 @@ class MonitorActivity : AppCompatActivity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         when {
+            sleepStatsPanelVisible -> {
+                hideSleepStatsPanel()
+            }
             enhancementPanelVisible -> {
                 hideEnhancementPanel()
             }
