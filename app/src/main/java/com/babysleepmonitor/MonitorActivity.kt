@@ -487,12 +487,12 @@ class MonitorActivity : AppCompatActivity() {
         // Stats values
         totalSleepTimeSheet.text = stats.getFormattedSleepTime()
         wakeUpsSheet.text = stats.wake_ups.toString()
-        sleepQualitySheet.text = "${stats.breathing_quality_percent}%"
+        sleepQualitySheet.text = "${stats.sleep_quality_score}%"
         sessionDurationSheet.text = stats.getFormattedSessionTime()
         
-        // Debug info - show mean motion and rhythmic detection
-        motionScoreSheet.text = String.format("%.0f (±%.0f)", stats.motion_mean, stats.motion_std)
-        lastBreathSheet.text = if (stats.breathing_detected) "now" else "${stats.state_duration_seconds}s ago"
+        // Debug info - show breathing rate and phase
+        motionScoreSheet.text = String.format("%.1f BPM", stats.breathing_rate_bpm)
+        lastBreathSheet.text = stats.breathing_phase
     }
 
     // ==================== ROI ====================
