@@ -487,10 +487,33 @@
                     android:textColor="@color/text_primary"
                     android:textSize="14sp" />
             </LinearLayout>
+
+            <!-- Stop Monitoring Button -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="48dp"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <Button
+                    android:id="@+id/stopMonitoringButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="56dp"
+                    android:background="@drawable/bg_button_outline_danger"
+                    android:drawableStart="@drawable/ic_stop_circle"
+                    android:drawablePadding="8dp"
+                    android:drawableTint="@color/danger_color"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.08"
+                    android:paddingHorizontal="40dp"
+                    android:text="STOP MONITORING"
+                    android:textAllCaps="true"
+                    android:textColor="@color/danger_color"
+                    android:textSize="13sp" />
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
-
-    <!-- ROI Action Buttons (shown in ROI mode) -->
     <LinearLayout
         android:id="@+id/roiActionBar"
         android:layout_width="0dp"

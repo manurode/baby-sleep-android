@@ -2,44 +2,45 @@
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Main Monitor View</title>
+<title>Main Monitor without Speak Button</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script>
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            colors: {
-              primary: "#14CBA8", // Teal color from context
-              "background-light": "#F3F4F6", // Soft gray
-              "background-dark": "#111827", // Dark gray/black
-              "card-light": "#FFFFFF",
-              "card-dark": "#1F2937", 
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#14CBA8", // Teal color
+                        "background-light": "#F3F4F6", // Soft gray
+                        "background-dark": "#111827", // Dark gray/black
+                        "card-light": "#FFFFFF",
+                        "card-dark": "#1F2937",
+                    },
+                    fontFamily: {
+                        display: ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "1rem",
+                        xl: "1.5rem",
+                        "2xl": "2rem",
+                        "3xl": "2.5rem",
+                    },
+                },
             },
-            fontFamily: {
-              display: ["Inter", "sans-serif"],
-            },
-            borderRadius: {
-              DEFAULT: "1rem",
-              xl: "1.5rem",
-              "2xl": "2rem",
-              "3xl": "2.5rem",
-            },
-          },
-        },
-      };
+        };
     </script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <style>
         body {
-          min-height: max(884px, 100dvh);
-        }.no-scrollbar::-webkit-scrollbar {
-          display: none;
+            min-height: max(884px, 100dvh);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
         }
         .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
     </style>
 <style>
@@ -69,7 +70,7 @@
 <span class="material-symbols-outlined">settings</span>
 </button>
 </header>
-<main class="flex-1 flex flex-col px-6 relative overflow-y-auto no-scrollbar pb-8">
+<main class="flex-1 flex flex-col px-6 relative overflow-y-auto no-scrollbar pb-12">
 <div class="absolute top-0 right-0 w-64 h-64 bg-primary opacity-10 blur-3xl rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 <div class="absolute bottom-40 left-0 w-72 h-72 bg-blue-400 opacity-10 dark:opacity-5 blur-3xl rounded-full translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
 <div class="relative w-full aspect-[4/5] bg-gray-200 dark:bg-gray-800 rounded-3xl overflow-hidden shadow-2xl shadow-primary/10 mb-6 z-10 group">
@@ -95,7 +96,7 @@
 </div>
 </div>
 </div>
-<div class="mb-8 flex items-center justify-between bg-white dark:bg-card-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 z-10">
+<div class="mb-6 flex items-center justify-between bg-white dark:bg-card-dark p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 z-10">
 <div class="flex items-center">
 <div class="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500 mr-3">
 <span class="material-symbols-outlined">motion_sensor_active</span>
@@ -111,7 +112,7 @@
 <span class="text-xs font-medium">Quiet</span>
 </div>
 </div>
-<div class="grid grid-cols-2 gap-4 z-10">
+<div class="grid grid-cols-2 gap-4 z-10 flex-1">
 <button class="bg-white dark:bg-card-dark p-5 rounded-2xl shadow-lg shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-800 flex flex-col items-start gap-3 hover:border-primary/50 transition-all active:scale-95 group text-left">
 <div class="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:bg-purple-100 dark:group-hover:bg-purple-900/40 transition-colors">
 <span class="material-symbols-outlined">tune</span>
@@ -131,10 +132,10 @@
 </div>
 </button>
 </div>
-<div class="mt-6 flex justify-center z-10 pb-4">
-<button class="flex items-center space-x-2 px-6 py-3 bg-primary text-white rounded-full shadow-lg shadow-primary/30 active:scale-95 transition-transform">
-<span class="material-symbols-outlined text-[20px]">mic</span>
-<span class="text-sm font-semibold">Hold to Speak</span>
+<div class="mt-12 flex flex-col items-center z-10">
+<button class="flex items-center justify-center space-x-2 px-10 py-4 bg-transparent border-2 border-red-100 dark:border-red-900/30 text-red-500 dark:text-red-400 rounded-full hover:bg-red-50 dark:hover:bg-red-900/10 active:scale-95 transition-all w-full max-w-[260px] shadow-sm">
+<span class="material-symbols-outlined text-[20px]">stop_circle</span>
+<span class="text-sm font-semibold uppercase tracking-wider">Stop Monitoring</span>
 </button>
 </div>
 </main>

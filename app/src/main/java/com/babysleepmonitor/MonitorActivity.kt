@@ -80,6 +80,9 @@ class MonitorActivity : AppCompatActivity() {
     private lateinit var roiActionBar: LinearLayout
     private lateinit var roiClearButton: Button
     private lateinit var roiSaveButton: Button
+    
+    // Stop monitoring button
+    private var stopMonitoringButton: Button? = null
 
     // State
     private var serverUrl: String = ""
@@ -87,6 +90,8 @@ class MonitorActivity : AppCompatActivity() {
     private var roiModeActive = false
     private var enhancementPanelVisible = false
     private var connectionLostDialogShown = false
+    private var connectionRetryCount = 0
+    private val MAX_RETRIES_BEFORE_DIALOG = 2
 
     // Pending ROI coordinates
     private var pendingRoiX: Float? = null
@@ -117,6 +122,20 @@ class MonitorActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        
+        // Reset dialog shown flag when coming back to the activity
+        // so that the dialog can be shown again if needed
+        connectionLostDialogShown = false
+        
+        Log.d(TAG, "onResume: isConnectionLost=${MonitoringService.isConnectionLost}, isRunning=${MonitoringService.isRunning}")
+        
+        // Check if connection was lost while app was in background
+        if (MonitoringService.isConnectionLost) {
+            Log.d(TAG, "Connection lost detected, showing dialog")
+            showConnectionLostDialog()
+            return
+        }
+        
         if (serverUrl.isNotEmpty()) {
             startStreaming()
         }
@@ -167,6 +186,9 @@ class MonitorActivity : AppCompatActivity() {
         roiActionBar = findViewById(R.id.roiActionBar)
         roiClearButton = findViewById(R.id.roiClearButton)
         roiSaveButton = findViewById(R.id.roiSaveButton)
+        
+        // Stop monitoring button (optional - may not exist in all layouts)
+        stopMonitoringButton = findViewById(R.id.stopMonitoringButton)
     }
 
     private fun setupListeners() {
@@ -221,6 +243,11 @@ class MonitorActivity : AppCompatActivity() {
         // Reset button
         resetEnhancementsButton.setOnClickListener {
             resetEnhancements()
+        }
+        
+        // Stop monitoring button
+        stopMonitoringButton?.setOnClickListener {
+            stopMonitoringAndNavigate()
         }
     }
 
@@ -469,9 +496,10 @@ class MonitorActivity : AppCompatActivity() {
                     continue
                 }
                 
-                // Successfully connected
+                // Successfully connected - reset counters
                 reconnectDelay = INITIAL_RECONNECT_DELAY_MS
                 connectionLostDialogShown = false
+                connectionRetryCount = 0
                 updateConnectionStatus("Connected", ConnectionState.CONNECTED)
                 
                 val mjpegStream = MjpegInputStream(inputStream)
@@ -500,7 +528,14 @@ class MonitorActivity : AppCompatActivity() {
             }
             
             if (coroutineContext.isActive) {
-                handleReconnect()
+                connectionRetryCount++
+                if (connectionRetryCount >= MAX_RETRIES_BEFORE_DIALOG && !connectionLostDialogShown) {
+                    withContext(Dispatchers.Main) {
+                        showConnectionLostDialog()
+                    }
+                } else {
+                    handleReconnect()
+                }
             }
         }
     }
@@ -517,11 +552,6 @@ class MonitorActivity : AppCompatActivity() {
                 ConnectionState.ERROR -> R.drawable.status_dot_disconnected
             }
             connectionIndicator.setBackgroundResource(indicatorDrawable)
-            
-            // Show connection lost dialog on error
-            if (state == ConnectionState.ERROR && !connectionLostDialogShown) {
-                showConnectionLostDialog()
-            }
         }
     }
 
@@ -587,8 +617,8 @@ class MonitorActivity : AppCompatActivity() {
         
         understoodButton.setOnClickListener {
             dialog.dismiss()
-            // Stop any alarms in the service
-            MonitoringService.stopAlarmSound(this)
+            // Stop monitoring service, alarms, and navigate to setup
+            stopMonitoringAndNavigate()
         }
         
         tryReconnectingButton.setOnClickListener {
@@ -599,6 +629,26 @@ class MonitorActivity : AppCompatActivity() {
         }
         
         dialog.show()
+    }
+
+    /**
+     * Stops the monitoring service, stops any alarms, and navigates to server setup.
+     * Called from Stop Monitoring button and Connection Lost dialog.
+     */
+    private fun stopMonitoringAndNavigate() {
+        // Stop the monitoring service
+        if (MonitoringService.isRunning) {
+            stopService(Intent(this, MonitoringService::class.java))
+        }
+        
+        // Stop any alarm sounds
+        MonitoringService.stopAlarmSound(this)
+        
+        // Stop streaming
+        stopStreaming()
+        
+        // Navigate to server setup
+        navigateToSetup()
     }
 
     // ==================== BACKGROUND SERVICE ====================

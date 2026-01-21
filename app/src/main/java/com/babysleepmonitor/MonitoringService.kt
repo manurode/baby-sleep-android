@@ -38,10 +38,16 @@ class MonitoringService : Service() {
         const val CHANNEL_ID_ALARM = "baby_monitor_alarm"
         const val NOTIFICATION_ID_SERVICE = 1
         const val NOTIFICATION_ID_ALARM = 2
+        const val NOTIFICATION_ID_CONNECTION_LOST = 3
         const val POLLING_INTERVAL_MS = 1500L // Poll every 1.5 seconds
+        const val MAX_CONSECUTIVE_FAILURES = 3 // ~4.5 seconds without connection
         
         @Volatile
         var isRunning = false
+            private set
+        
+        @Volatile
+        var isConnectionLost = false
             private set
         
         /**
@@ -51,6 +57,8 @@ class MonitoringService : Service() {
         fun stopAlarmSound(context: Context) {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.cancel(NOTIFICATION_ID_ALARM)
+            notificationManager.cancel(NOTIFICATION_ID_CONNECTION_LOST)
+            isConnectionLost = false
         }
     }
 
@@ -60,6 +68,8 @@ class MonitoringService : Service() {
     
     private var serverUrl: String = ""
     private var isAlarmActive = false
+    private var consecutiveFailures = 0
+    private var connectionLostAlarmActive = false
     private val gson = Gson()
 
     private val pollingRunnable = object : Runnable {
@@ -201,16 +211,41 @@ class MonitoringService : Service() {
                     val body = response.body?.string()
                     if (body != null) {
                         val status = gson.fromJson(body, StatusResponse::class.java)
+                        // Reset connection failure counter on success
+                        handler.post {
+                            consecutiveFailures = 0
+                            if (connectionLostAlarmActive) {
+                                connectionLostAlarmActive = false
+                                isConnectionLost = false
+                                cancelConnectionLostNotification()
+                            }
+                        }
                         handleStatusUpdate(status)
                     }
                 } else {
                     Log.w(TAG, "Server returned error: ${response.code}")
+                    handleConnectionFailure()
                 }
                 response.close()
             } catch (e: IOException) {
                 Log.e(TAG, "Failed to connect to server: ${e.message}")
+                handleConnectionFailure()
             }
         }.start()
+    }
+
+    private fun handleConnectionFailure() {
+        handler.post {
+            consecutiveFailures++
+            Log.d(TAG, "Connection failure #$consecutiveFailures")
+            
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !connectionLostAlarmActive) {
+                connectionLostAlarmActive = true
+                isConnectionLost = true
+                showConnectionLostNotification()
+                vibratePhone()
+            }
+        }
     }
 
     private fun handleStatusUpdate(status: StatusResponse) {
@@ -255,6 +290,35 @@ class MonitoringService : Service() {
     private fun cancelAlarmNotification() {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(NOTIFICATION_ID_ALARM)
+    }
+
+    private fun showConnectionLostNotification() {
+        val openAppIntent = Intent(this, MonitorActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID_ALARM)
+            .setContentTitle("⚠️ CONNECTION LOST!")
+            .setContentText("Lost connection with the baby monitor server. Your baby is NOT being monitored!")
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setAutoCancel(false)
+            .setOngoing(true)
+            .setVibrate(longArrayOf(0, 500, 250, 500, 250, 500))
+            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_LIGHTS)
+            .build()
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID_CONNECTION_LOST, notification)
+    }
+
+    private fun cancelConnectionLostNotification() {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(NOTIFICATION_ID_CONNECTION_LOST)
     }
 
     private fun vibratePhone() {
