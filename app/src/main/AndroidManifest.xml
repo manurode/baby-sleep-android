@@ -68,6 +68,18 @@
             android:name=".SettingsActivity"
             android:exported="false"
             android:theme="@style/Theme.BabySleepMonitor" />
+        
+        <!-- Sleep History Activity -->
+        <activity
+            android:name=".SleepHistoryActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BabySleepMonitor" />
+        
+        <!-- Sleep Report (Detail) Activity -->
+        <activity
+            android:name=".SleepReportActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BabySleepMonitor" />
 
         <!-- Background Monitoring Service -->
         <service

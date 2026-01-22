@@ -53,6 +53,11 @@
     <color name="slider_track">#E5E7EB</color>
     <color name="slider_thumb">#14CBA8</color>
     
+    <!-- Teal Colors -->
+    <color name="teal_500">#14B8A6</color>
+    <color name="teal_400">#2DD4BF</color>
+    <color name="teal_600">#0D9488</color>
+    
     <!-- Sleep Stats Bottom Sheet -->
     <color name="surface">#1F2937</color>
     <color name="divider">#374151</color>

@@ -1,6 +1,8 @@
 package com.babysleepmonitor.network
 
 import com.babysleepmonitor.data.SettingsResponse
+import com.babysleepmonitor.data.SleepHistoryResponse
+import com.babysleepmonitor.data.SleepReportResponse
 import com.babysleepmonitor.data.SleepStatsResponse
 import com.babysleepmonitor.data.StatusResponse
 import com.google.gson.Gson
@@ -244,6 +246,58 @@ object ApiClient {
         response.close()
         
         success
+    }
+    
+    // ==================== Sleep History API ====================
+    
+    /**
+     * Get list of past sleep sessions (summary data).
+     * 
+     * @param baseUrl Server base URL
+     * @param limit Maximum number of sessions to retrieve (default 50)
+     * @return SleepHistoryResponse containing list of sessions
+     */
+    suspend fun getSleepHistory(baseUrl: String, limit: Int = 50): SleepHistoryResponse = withContext(Dispatchers.IO) {
+        val url = normalizeUrl(baseUrl, "/sleep_history?limit=$limit")
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+        
+        val response = httpClient.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw IOException("Sleep history request failed: ${response.code}")
+        }
+        
+        val body = response.body?.string() ?: throw IOException("Empty response body")
+        response.close()
+        
+        gson.fromJson(body, SleepHistoryResponse::class.java)
+    }
+    
+    /**
+     * Get full report for a specific historical session.
+     * 
+     * @param baseUrl Server base URL
+     * @param sessionId The ID of the session to retrieve
+     * @return SleepReportResponse with full session details
+     */
+    suspend fun getSleepReport(baseUrl: String, sessionId: String): SleepReportResponse = withContext(Dispatchers.IO) {
+        val url = normalizeUrl(baseUrl, "/sleep_report/$sessionId")
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+        
+        val response = httpClient.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw IOException("Sleep report request failed: ${response.code}")
+        }
+        
+        val body = response.body?.string() ?: throw IOException("Empty response body")
+        response.close()
+        
+        gson.fromJson(body, SleepReportResponse::class.java)
     }
     
     /**

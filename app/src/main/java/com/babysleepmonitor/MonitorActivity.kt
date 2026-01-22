@@ -64,6 +64,7 @@ class MonitorActivity : AppCompatActivity() {
     private lateinit var settingsButton: FrameLayout
     private lateinit var enhancementCard: LinearLayout
     private lateinit var detectionAreaCard: LinearLayout
+    private lateinit var sleepHistoryCard: LinearLayout
     
     // Enhancement bottom sheet
     private lateinit var enhancementBottomSheet: FrameLayout
@@ -189,6 +190,7 @@ class MonitorActivity : AppCompatActivity() {
         settingsButton = findViewById(R.id.settingsButton)
         enhancementCard = findViewById(R.id.enhancementCard)
         detectionAreaCard = findViewById(R.id.detectionAreaCard)
+        sleepHistoryCard = findViewById(R.id.sleepHistoryCard)
         
         // Enhancement bottom sheet
         enhancementBottomSheet = findViewById(R.id.enhancementBottomSheet)
@@ -245,6 +247,11 @@ class MonitorActivity : AppCompatActivity() {
             val intent = Intent(this, DetectionZoneActivity::class.java)
             intent.putExtra("server_url", serverUrl)
             startActivity(intent)
+        }
+
+        // Sleep history card
+        sleepHistoryCard.setOnClickListener {
+            startActivity(Intent(this, SleepHistoryActivity::class.java))
         }
 
         // Close enhancement button
