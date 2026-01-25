@@ -23,10 +23,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.ui.PlayerView
 import com.babysleepmonitor.data.SleepStatsResponse
 import com.babysleepmonitor.data.StatusResponse
 import com.babysleepmonitor.network.ApiClient
 import com.babysleepmonitor.network.MjpegInputStream
+import com.babysleepmonitor.network.RtspPlayerManager
 import com.babysleepmonitor.ui.RoiSelectionView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -54,6 +56,7 @@ class MonitorActivity : AppCompatActivity() {
 
     // Views
     private lateinit var videoView: ImageView
+    private lateinit var rtspPlayerView: PlayerView
     private lateinit var roiSelectionView: RoiSelectionView
     private lateinit var connectionIndicator: View
     private lateinit var connectionStatusText: TextView
@@ -113,6 +116,10 @@ class MonitorActivity : AppCompatActivity() {
     private var connectionLostDialogShown = false
     private var connectionRetryCount = 0
     private val MAX_RETRIES_BEFORE_DIALOG = 2
+    private var isRtspMode = false
+    
+    // RTSP Player
+    private var rtspPlayerManager: RtspPlayerManager? = null
 
     // Pending ROI coordinates
     private var pendingRoiX: Float? = null
@@ -171,11 +178,14 @@ class MonitorActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopStreaming()
+        releaseRtspPlayer()
     }
+
 
     private fun initViews() {
         // Video container
         videoView = findViewById(R.id.videoView)
+        rtspPlayerView = findViewById(R.id.rtspPlayerView)
         roiSelectionView = findViewById(R.id.roiSelectionView)
         
         // Status
@@ -600,6 +610,72 @@ class MonitorActivity : AppCompatActivity() {
     private fun startStreaming() {
         stopStreaming()
         
+        // Detect stream type based on URL
+        isRtspMode = serverUrl.startsWith("rtsp://")
+        
+        if (isRtspMode) {
+            // Use ExoPlayer for RTSP
+            startRtspStreaming()
+        } else {
+            // Use MJPEG streaming for HTTP
+            startMjpegStreaming()
+        }
+    }
+    
+    private fun startRtspStreaming() {
+        Log.d(TAG, "Starting RTSP streaming: $serverUrl")
+        
+        // Show RTSP player, hide MJPEG view
+        videoView.visibility = View.GONE
+        rtspPlayerView.visibility = View.VISIBLE
+        
+        // Initialize RTSP player
+        if (rtspPlayerManager == null) {
+            rtspPlayerManager = RtspPlayerManager(this)
+        }
+        
+        rtspPlayerManager?.apply {
+            initialize(rtspPlayerView)
+            setPlayerStateListener(object : RtspPlayerManager.PlayerStateListener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    lifecycleScope.launch {
+                        if (isPlaying) {
+                            updateConnectionStatus("Connected", ConnectionState.CONNECTED)
+                        }
+                    }
+                }
+                
+                override fun onError(error: String) {
+                    lifecycleScope.launch {
+                        updateConnectionStatus("Error", ConnectionState.ERROR)
+                        Log.e(TAG, "RTSP Error: $error")
+                    }
+                }
+                
+                override fun onBuffering(isBuffering: Boolean) {
+                    lifecycleScope.launch {
+                        if (isBuffering) {
+                            updateConnectionStatus("Buffering...", ConnectionState.CONNECTING)
+                        }
+                    }
+                }
+            })
+            play(serverUrl)
+        }
+        
+        lifecycleScope.launch {
+            updateConnectionStatus("Connecting", ConnectionState.CONNECTING)
+        }
+        
+        // Note: For RTSP mode, we don't poll status from the Python backend
+        // since we're connecting directly to the ONVIF camera
+    }
+    
+    private fun startMjpegStreaming() {
+        // Show MJPEG view, hide RTSP player
+        videoView.visibility = View.VISIBLE
+        rtspPlayerView.visibility = View.GONE
+        
         videoStreamJob = lifecycleScope.launch {
             streamVideo()
         }
@@ -614,6 +690,14 @@ class MonitorActivity : AppCompatActivity() {
         statusPollJob?.cancel()
         videoStreamJob = null
         statusPollJob = null
+        
+        // Stop RTSP player if active
+        rtspPlayerManager?.stop()
+    }
+    
+    private fun releaseRtspPlayer() {
+        rtspPlayerManager?.release()
+        rtspPlayerManager = null
     }
 
     private suspend fun streamVideo() {

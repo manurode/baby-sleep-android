@@ -7,13 +7,16 @@ import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.babysleepmonitor.data.OnvifCamera
 import com.babysleepmonitor.network.ApiClient
+import com.babysleepmonitor.ui.CameraDiscoveryDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
  * Server Setup screen for entering the server IP address and port.
+ * Also supports ONVIF camera discovery for direct RTSP streaming.
  * Validates connection before proceeding to the main monitor screen.
  */
 class ServerSetupActivity : AppCompatActivity() {
@@ -22,6 +25,10 @@ class ServerSetupActivity : AppCompatActivity() {
     private lateinit var portInput: EditText
     private lateinit var startMonitoringButton: Button
     private lateinit var cancelButton: Button
+    private lateinit var discoverCamerasButton: Button
+    
+    // Holds selected ONVIF camera (if any)
+    private var selectedCamera: OnvifCamera? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,6 +44,7 @@ class ServerSetupActivity : AppCompatActivity() {
         portInput = findViewById(R.id.portInput)
         startMonitoringButton = findViewById(R.id.startMonitoringButton)
         cancelButton = findViewById(R.id.cancelButton)
+        discoverCamerasButton = findViewById(R.id.discoverCamerasButton)
     }
 
     private fun loadSavedServerUrl() {
@@ -46,12 +54,18 @@ class ServerSetupActivity : AppCompatActivity() {
         // Parse saved URL to extract IP and port
         if (savedUrl.isNotEmpty()) {
             try {
-                val urlWithoutProtocol = savedUrl.removePrefix("http://").removePrefix("https://")
-                val parts = urlWithoutProtocol.split(":")
-                if (parts.isNotEmpty()) {
-                    ipAddressInput.setText(parts[0])
-                    if (parts.size > 1) {
-                        portInput.setText(parts[1])
+                // Handle RTSP URLs differently
+                if (savedUrl.startsWith("rtsp://")) {
+                    ipAddressInput.setText(savedUrl)
+                    portInput.setText("")
+                } else {
+                    val urlWithoutProtocol = savedUrl.removePrefix("http://").removePrefix("https://")
+                    val parts = urlWithoutProtocol.split(":")
+                    if (parts.isNotEmpty()) {
+                        ipAddressInput.setText(parts[0])
+                        if (parts.size > 1) {
+                            portInput.setText(parts[1])
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -61,6 +75,11 @@ class ServerSetupActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
+        // ONVIF Camera Discovery button
+        discoverCamerasButton.setOnClickListener {
+            showCameraDiscoveryDialog()
+        }
+        
         startMonitoringButton.setOnClickListener {
             val ip = ipAddressInput.text.toString().trim()
             val port = portInput.text.toString().trim().ifEmpty { "5000" }
@@ -70,7 +89,19 @@ class ServerSetupActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            val serverUrl = "http://$ip:$port"
+            // Determine if this is an RTSP URL or HTTP server
+            val serverUrl = when {
+                ip.startsWith("rtsp://") -> ip
+                ip.startsWith("http://") || ip.startsWith("https://") -> ip
+                else -> "http://$ip:$port"
+            }
+            
+            // For RTSP, skip connection test and go directly to monitor
+            if (serverUrl.startsWith("rtsp://")) {
+                saveServerUrl(serverUrl)
+                navigateToMonitor(serverUrl)
+                return@setOnClickListener
+            }
             
             // Disable button and show loading state
             startMonitoringButton.isEnabled = false
@@ -84,12 +115,7 @@ class ServerSetupActivity : AppCompatActivity() {
                     if (connected) {
                         // Save the server URL
                         saveServerUrl(serverUrl)
-                        
-                        // Navigate to monitor screen
-                        val intent = Intent(this@ServerSetupActivity, MonitorActivity::class.java)
-                        intent.putExtra("server_url", serverUrl)
-                        startActivity(intent)
-                        finish()
+                        navigateToMonitor(serverUrl)
                     } else {
                         showConnectionError(serverUrl)
                     }
@@ -102,6 +128,36 @@ class ServerSetupActivity : AppCompatActivity() {
         cancelButton.setOnClickListener {
             finish()
         }
+    }
+    
+    private fun showCameraDiscoveryDialog() {
+        val dialog = CameraDiscoveryDialog.newInstance()
+        dialog.setOnCameraSelectedListener { camera ->
+            onCameraSelected(camera)
+        }
+        dialog.show(supportFragmentManager, CameraDiscoveryDialog.TAG)
+    }
+    
+    private fun onCameraSelected(camera: OnvifCamera) {
+        selectedCamera = camera
+        
+        // Populate the IP field with the RTSP stream URI if available
+        if (!camera.streamUri.isNullOrBlank()) {
+            ipAddressInput.setText(camera.streamUri)
+            portInput.setText("")
+            Toast.makeText(this, "Selected: ${camera.displayName}", Toast.LENGTH_SHORT).show()
+        } else if (camera.hostname.isNotBlank()) {
+            // Fallback to hostname if no stream URI
+            ipAddressInput.setText(camera.hostname)
+            Toast.makeText(this, "Camera found but no stream URI available. You may need to configure it manually.", Toast.LENGTH_LONG).show()
+        }
+    }
+    
+    private fun navigateToMonitor(serverUrl: String) {
+        val intent = Intent(this@ServerSetupActivity, MonitorActivity::class.java)
+        intent.putExtra("server_url", serverUrl)
+        startActivity(intent)
+        finish()
     }
 
     private suspend fun testConnection(serverUrl: String): Boolean {

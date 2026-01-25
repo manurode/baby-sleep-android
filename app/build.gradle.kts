@@ -47,4 +47,17 @@ dependencies {
     implementation(libs.gson)
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.cardview:cardview:1.0.0")
+    
+    // ONVIF Camera Discovery (from Maven Central)
+    implementation("com.seanproctor:onvifcamera-android:2.1.4")
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.client.logging)
+    implementation(libs.ktor.serialization.kotlinx.xml)
+    
+    // ExoPlayer for RTSP streaming
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.exoplayer.rtsp)
+    implementation(libs.media3.ui)
 }

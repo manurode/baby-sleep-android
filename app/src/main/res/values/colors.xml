@@ -48,6 +48,10 @@
     <!-- Border Colors -->
     <color name="border_light">#E5E7EB</color>
     <color name="border_dark">#374151</color>
+    <color name="border_color">#E5E7EB</color>
+    <color name="divider_color">#E5E7EB</color>
+    <color name="primary_color">#14CBA8</color>
+    <color name="error_red">#EF4444</color>
     
     <!-- Slider/Seekbar -->
     <color name="slider_track">#E5E7EB</color>

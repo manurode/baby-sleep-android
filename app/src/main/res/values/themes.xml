@@ -3,14 +3,9 @@
     <style name="Theme.BabySleepMonitor" parent="Theme.MaterialComponents.Light.NoActionBar">
         <!-- Primary brand color -->
         <item name="colorPrimary">@color/primary</item>
-        <item name="colorPrimaryVariant">@color/primary_dark</item>
-        <item name="colorOnPrimary">@color/white</item>
-        
-        <!-- Secondary brand color -->
-        <item name="colorSecondary">@color/primary</item>
-        <item name="colorSecondaryVariant">@color/primary_dark</item>
-        <item name="colorOnSecondary">@color/white</item>
-        
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/primary</item>
+
         <!-- Status bar color -->
         <item name="android:statusBarColor">@color/background_light</item>
         <item name="android:navigationBarColor">@color/background_light</item>
@@ -18,13 +13,27 @@
         
         <!-- Background -->
         <item name="android:windowBackground">@color/background_light</item>
-        
-        <!-- Error color -->
-        <item name="colorError">@color/danger_color</item>
-        
+
         <!-- Surface colors -->
         <item name="colorSurface">@color/card_light</item>
         <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorSurfaceVariant">@color/background_light</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+
+        <!-- Standard text colors -->
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textColorHint">@color/text_tertiary</item>
+
+        <!-- AlertDialog styling -->
+        <item name="alertDialogTheme">@style/Theme.BabySleepMonitor.AlertDialog</item>
+    </style>
+
+    <style name="Theme.BabySleepMonitor.AlertDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorAccent">@color/primary</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
     </style>
     
     <!-- Full screen theme for video -->

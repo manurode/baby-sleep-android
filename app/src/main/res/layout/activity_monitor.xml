@@ -128,13 +128,20 @@
                 android:clipToOutline="true"
                 android:outlineProvider="background">
 
-                <!-- Video View -->
+                <!-- Video View (for MJPEG) -->
                 <ImageView
                     android:id="@+id/videoView"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:scaleType="centerCrop"
                     android:contentDescription="Live video feed" />
+
+                <!-- RTSP Player View (for ONVIF cameras) -->
+                <androidx.media3.ui.PlayerView
+                    android:id="@+id/rtspPlayerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone" />
 
                 <!-- ROI Selection Overlay -->
                 <com.babysleepmonitor.ui.RoiSelectionView

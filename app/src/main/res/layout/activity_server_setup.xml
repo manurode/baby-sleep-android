@@ -248,12 +248,64 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- Discover ONVIF Cameras Button -->
+        <Button
+            android:id="@+id/discoverCamerasButton"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_marginTop="24dp"
+            android:background="@drawable/bg_button_secondary"
+            android:drawableStart="@drawable/ic_videocam"
+            android:drawablePadding="8dp"
+            android:drawableTint="@color/primary_color"
+            android:fontFamily="sans-serif-medium"
+            android:text="Discover ONVIF Cameras"
+            android:textAllCaps="false"
+            android:textColor="@color/primary_color"
+            android:textSize="15sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/infoBox" />
+
+        <!-- Divider with "or" text -->
+        <LinearLayout
+            android:id="@+id/dividerContainer"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/discoverCamerasButton">
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"
+                android:background="@color/divider_color" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:text="or enter manually"
+                android:textColor="@color/text_tertiary"
+                android:textSize="12sp" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"
+                android:background="@color/divider_color" />
+        </LinearLayout>
+
         <!-- Start Monitoring Button -->
         <Button
             android:id="@+id/startMonitoringButton"
             android:layout_width="0dp"
             android:layout_height="56dp"
-            android:layout_marginTop="32dp"
+            android:layout_marginTop="16dp"
             android:background="@drawable/bg_button_primary"
             android:drawableEnd="@drawable/ic_arrow_forward"
             android:drawablePadding="8dp"
@@ -265,7 +317,7 @@
             android:textSize="16sp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/infoBox" />
+            app:layout_constraintTop_toBottomOf="@id/dividerContainer" />
 
         <!-- Cancel Button -->
         <Button

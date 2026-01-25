@@ -60,6 +60,7 @@ class ConnectionErrorActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        super.onBackPressed()
         // Go back to server setup
         val intent = Intent(this, ServerSetupActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
