@@ -27,12 +27,14 @@ class CameraAuthDialog : DialogFragment() {
         const val TAG = "CameraAuthDialog"
         private const val ARG_HOSTNAME = "hostname"
         private const val ARG_CAMERA_NAME = "camera_name"
+        private const val ARG_SERVICE_URL = "service_url"
         
-        fun newInstance(hostname: String, cameraName: String): CameraAuthDialog {
+        fun newInstance(hostname: String, cameraName: String, serviceUrl: String = ""): CameraAuthDialog {
             return CameraAuthDialog().apply {
                 arguments = Bundle().apply {
                     putString(ARG_HOSTNAME, hostname)
                     putString(ARG_CAMERA_NAME, cameraName)
+                    putString(ARG_SERVICE_URL, serviceUrl)
                 }
             }
         }
@@ -156,6 +158,8 @@ class CameraAuthDialog : DialogFragment() {
     
     private fun attemptConnection() {
         val rawHostname = arguments?.getString(ARG_HOSTNAME) ?: return
+        val savedServiceUrl = arguments?.getString(ARG_SERVICE_URL) ?: ""
+        
         val (ip, _) = parseHostPort(rawHostname)  // Get just the IP, ignore any existing port
         val port = etPort.text.toString().trim().ifEmpty { "80" }
         val username = etUsername.text.toString().trim()
@@ -166,12 +170,25 @@ class CameraAuthDialog : DialogFragment() {
         
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                // Build the full address with port (IP:PORT)
-                val fullAddress = "$ip:$port"
+                // Determine the URL to use.
+                // If the user hasn't changed the port from what we detected, and we have a valid service URL, use the service URL.
+                // Otherwise (custom port), we have to assume a standard path or just IP:Port.
+                
+                val userModifiedPort = port != parseHostPort(rawHostname).second && port != "80" // Simple check
+                
+                val connectionUrl = if (savedServiceUrl.isNotBlank() && !userModifiedPort) {
+                   savedServiceUrl
+                } else {
+                   // Fallback logic: standard ONVIF path is usually /onvif/device_service
+                   // If we just use IP:Port, the Manager will now attempt to fix it, but let's be explicit if we can.
+                   "http://$ip:$port/onvif/device_service"
+                }
+
                 
                 val camera = withContext(Dispatchers.IO) {
+                    // Note: We use the smart getCameraDetails which handles retrying with/without path
                     discoveryManager.getCameraDetails(
-                        hostname = fullAddress,
+                        connectionUrl = connectionUrl,
                         username = username.ifEmpty { null },
                         password = password.ifEmpty { null }
                     )

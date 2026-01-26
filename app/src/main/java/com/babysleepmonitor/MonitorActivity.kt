@@ -23,7 +23,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.ui.PlayerView
+import org.videolan.libvlc.util.VLCVideoLayout
 import com.babysleepmonitor.data.SleepStatsResponse
 import com.babysleepmonitor.data.StatusResponse
 import com.babysleepmonitor.network.ApiClient
@@ -56,7 +56,7 @@ class MonitorActivity : AppCompatActivity() {
 
     // Views
     private lateinit var videoView: ImageView
-    private lateinit var rtspPlayerView: PlayerView
+    private lateinit var rtspPlayerView: VLCVideoLayout
     private lateinit var roiSelectionView: RoiSelectionView
     private lateinit var connectionIndicator: View
     private lateinit var connectionStatusText: TextView
@@ -660,7 +660,19 @@ class MonitorActivity : AppCompatActivity() {
                     }
                 }
             })
-            play(serverUrl)
+            
+            // Get credentials from intent if available
+            var username = intent.getStringExtra("username")
+            var password = intent.getStringExtra("password")
+            
+            // Fallback to shared prefs if not in intent
+            if (username == null || password == null) {
+                 val prefs = getSharedPreferences("BabySleepMonitor", MODE_PRIVATE)
+                 username = username ?: prefs.getString("rtsp_username", null)
+                 password = password ?: prefs.getString("rtsp_password", null)
+            }
+            
+            play(serverUrl, username, password)
         }
         
         lifecycleScope.launch {

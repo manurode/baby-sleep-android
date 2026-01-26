@@ -3,17 +3,15 @@ package com.babysleepmonitor.network
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import androidx.annotation.OptIn
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.rtsp.RtspMediaSource
-import androidx.media3.ui.PlayerView
+import org.videolan.libvlc.LibVLC
+import org.videolan.libvlc.Media
+import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.util.VLCVideoLayout
+import java.util.ArrayList
 
 /**
- * Manages ExoPlayer for RTSP video streaming.
+ * Manages LibVLC for robust RTSP video streaming.
+ * Replaces ExoPlayer implementation to handle complex auth/codecs.
  */
 class RtspPlayerManager(private val context: Context) {
     
@@ -21,9 +19,10 @@ class RtspPlayerManager(private val context: Context) {
         private const val TAG = "RtspPlayerManager"
     }
     
-    private var player: ExoPlayer? = null
-    private var playerView: PlayerView? = null
-    private var currentUri: String? = null
+    private var libVlc: LibVLC? = null
+    private var mediaPlayer: MediaPlayer? = null
+    private var videoLayout: VLCVideoLayout? = null
+    private var stateListener: PlayerStateListener? = null
     
     /**
      * Listener for player state changes
@@ -34,90 +33,116 @@ class RtspPlayerManager(private val context: Context) {
         fun onBuffering(isBuffering: Boolean)
     }
     
-    private var stateListener: PlayerStateListener? = null
-    
     fun setPlayerStateListener(listener: PlayerStateListener?) {
         stateListener = listener
     }
     
     /**
-     * Initializes the player and attaches it to the PlayerView.
-     * @param playerView The PlayerView to attach the player to
+     * Initializes the player and attaches it to the VLCVideoLayout.
+     * @param layout The VLCVideoLayout to attach the player to
      */
-    fun initialize(playerView: PlayerView) {
-        this.playerView = playerView
-        
-        if (player == null) {
-            player = ExoPlayer.Builder(context).build().apply {
-                addListener(object : Player.Listener {
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        Log.d(TAG, "Player isPlaying: $isPlaying")
-                        stateListener?.onIsPlayingChanged(isPlaying)
-                    }
-                    
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        val stateStr = when (playbackState) {
-                            Player.STATE_IDLE -> "IDLE"
-                            Player.STATE_BUFFERING -> "BUFFERING"
-                            Player.STATE_READY -> "READY"
-                            Player.STATE_ENDED -> "ENDED"
-                            else -> "UNKNOWN"
-                        }
-                        Log.d(TAG, "Playback state: $stateStr")
-                        stateListener?.onBuffering(playbackState == Player.STATE_BUFFERING)
-                    }
-                    
-                    override fun onPlayerError(error: PlaybackException) {
-                        Log.e(TAG, "Player error: ${error.message}")
-                        stateListener?.onError(error.message ?: "Unknown playback error")
-                    }
-                })
-            }
-        }
-        
-        playerView.player = player
+    fun initialize(layout: VLCVideoLayout) {
+        this.videoLayout = layout
     }
-    
+
     /**
      * Plays an RTSP stream.
-     * @param rtspUri The RTSP URI to play
-     * @param username Optional username for RTSP authentication
-     * @param password Optional password for RTSP authentication
      */
-    @OptIn(UnstableApi::class)
     fun play(rtspUri: String, username: String? = null, password: String? = null) {
-        val player = this.player ?: run {
-            Log.e(TAG, "Player not initialized. Call initialize() first.")
-            return
+        try {
+            if (videoLayout == null) {
+                Log.e(TAG, "VideoLayout not initialized!")
+                stateListener?.onError("Video layout not initialized")
+                return
+            }
+            
+            // Release previous instance
+            releasePlayer()
+
+            val options = ArrayList<String>()
+            // Force TCP for better reliability over WiFi
+            options.add("--rtsp-tcp")
+            // Network caching (latency vs stability). 600ms is a good balance.
+            options.add("--network-caching=600")
+            // Drop late frames
+            options.add("--drop-late-frames")
+            options.add("--skip-frames")
+            // Verbose logs for debugging
+            // options.add("-vvv") 
+
+            libVlc = LibVLC(context, options)
+            mediaPlayer = MediaPlayer(libVlc)
+
+            mediaPlayer?.attachViews(videoLayout!!, null, false, false)
+
+            mediaPlayer?.setEventListener { event ->
+                when (event.type) {
+                    MediaPlayer.Event.Playing -> {
+                        Log.d(TAG, "LibVLC: Playing")
+                        stateListener?.onIsPlayingChanged(true)
+                        stateListener?.onBuffering(false)
+                    }
+                    MediaPlayer.Event.Buffering -> {
+                         // Only map buffering start (0) or significant changes?
+                         // VLC events send buffering percentage.
+                         if (event.buffering == 100f) {
+                             stateListener?.onBuffering(false)
+                         } else if (event.buffering < 100f) {
+                             // Optional: notify buffering
+                         }
+                    }
+                    MediaPlayer.Event.EncounteredError -> {
+                        Log.e(TAG, "LibVLC: Encountered Error")
+                        stateListener?.onError("Playback Error")
+                        stateListener?.onIsPlayingChanged(false)
+                    }
+                    MediaPlayer.Event.Stopped -> {
+                         Log.d(TAG, "LibVLC: Stopped")
+                         stateListener?.onIsPlayingChanged(false)
+                    }
+                }
+            }
+
+            // Manually inject request credentials into URI if provided
+            // LibVLC handles rtsp://user:pass@host very well.
+            val finalUri = if (!username.isNullOrBlank() && !password.isNullOrBlank()) {
+                 try {
+                     val uriObj = Uri.parse(rtspUri)
+                     val scheme = uriObj.scheme ?: "rtsp"
+                     val host = uriObj.host ?: ""
+                     val port = if (uriObj.port != -1) ":${uriObj.port}" else ""
+                     val path = uriObj.path ?: ""
+                     val query = if (uriObj.query != null) "?${uriObj.query}" else ""
+                     
+                     val encUser = Uri.encode(username)
+                     val encPass = Uri.encode(password)
+                     
+                     "$scheme://$encUser:$encPass@$host$port$path$query"
+                 } catch (e: Exception) {
+                     rtspUri
+                 }
+            } else {
+                rtspUri
+            }
+            
+            Log.d(TAG, "Playing RTSP: $finalUri")
+            
+            val media = Media(libVlc, Uri.parse(finalUri))
+            // Enable Hardware Decoding
+            media.setHWDecoderEnabled(true, false)
+            
+            // Add options specific to this media if needed
+            // media.addOption(":rtsp-tcp")
+            
+            mediaPlayer?.media = media
+            media.release() // Media is now owned by player
+
+            mediaPlayer?.play()
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initializing LibVLC", e)
+            stateListener?.onError("Init Error: ${e.message}")
         }
-        
-        Log.d(TAG, "Playing RTSP stream: $rtspUri")
-        currentUri = rtspUri
-        
-        // Build URI with credentials if provided
-        val uriWithAuth = if (!username.isNullOrBlank() && !password.isNullOrBlank()) {
-            // Insert credentials into RTSP URL: rtsp://user:pass@host:port/path
-            val uri = Uri.parse(rtspUri)
-            Uri.Builder()
-                .scheme(uri.scheme)
-                .encodedAuthority("$username:$password@${uri.host}:${uri.port}")
-                .encodedPath(uri.encodedPath)
-                .encodedQuery(uri.encodedQuery)
-                .build()
-                .toString()
-        } else {
-            rtspUri
-        }
-        
-        val mediaItem = MediaItem.fromUri(uriWithAuth)
-        
-        // Create RTSP media source
-        val rtspMediaSource = RtspMediaSource.Factory()
-            .createMediaSource(mediaItem)
-        
-        player.setMediaSource(rtspMediaSource)
-        player.prepare()
-        player.playWhenReady = true
     }
     
     /**
@@ -125,33 +150,33 @@ class RtspPlayerManager(private val context: Context) {
      */
     fun stop() {
         Log.d(TAG, "Stopping playback")
-        player?.stop()
-        currentUri = null
+        mediaPlayer?.stop()
+        stateListener?.onIsPlayingChanged(false)
     }
     
     /**
      * Pauses playback.
      */
     fun pause() {
-        player?.pause()
+        mediaPlayer?.pause()
     }
     
     /**
      * Resumes playback.
      */
     fun resume() {
-        player?.play()
+        mediaPlayer?.play()
     }
     
     /**
      * Returns whether the player is currently playing.
      */
-    fun isPlaying(): Boolean = player?.isPlaying == true
+    fun isPlaying(): Boolean = mediaPlayer?.isPlaying == true
     
     /**
-     * Returns the current stream URI.
+     * Returns the current stream URI (not tracked currently).
      */
-    fun getCurrentUri(): String? = currentUri
+    fun getCurrentUri(): String? = null
     
     /**
      * Releases the player resources.
@@ -159,11 +184,21 @@ class RtspPlayerManager(private val context: Context) {
      */
     fun release() {
         Log.d(TAG, "Releasing player")
-        playerView?.player = null
-        player?.release()
-        player = null
-        playerView = null
-        currentUri = null
+        releasePlayer()
+        videoLayout = null
         stateListener = null
+    }
+
+    private fun releasePlayer() {
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.detachViews()
+            mediaPlayer?.release()
+            mediaPlayer = null
+            libVlc?.release()
+            libVlc = null
+        } catch (e: Exception) {
+            Log.w(TAG, "Error releasing player", e)
+        }
     }
 }

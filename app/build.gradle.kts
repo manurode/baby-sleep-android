@@ -56,8 +56,6 @@ dependencies {
     implementation(libs.ktor.client.logging)
     implementation(libs.ktor.serialization.kotlinx.xml)
     
-    // ExoPlayer for RTSP streaming
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.exoplayer.rtsp)
-    implementation(libs.media3.ui)
+    // LibVLC for RTSP streaming
+    implementation("org.videolan.android:libvlc-all:3.6.0-eap5")
 }

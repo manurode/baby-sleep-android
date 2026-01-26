@@ -156,6 +156,20 @@ class ServerSetupActivity : AppCompatActivity() {
     private fun navigateToMonitor(serverUrl: String) {
         val intent = Intent(this@ServerSetupActivity, MonitorActivity::class.java)
         intent.putExtra("server_url", serverUrl)
+        
+        // Pass credentials if available from selected camera
+        selectedCamera?.let { camera ->
+            // Use contains check as URL might differ slightly (e.g. port) or match exactly
+            if (serverUrl == camera.streamUri || serverUrl.contains(camera.hostname)) {
+                if (!camera.username.isNullOrBlank()) {
+                    intent.putExtra("username", camera.username)
+                }
+                if (!camera.password.isNullOrBlank()) {
+                    intent.putExtra("password", camera.password)
+                }
+            }
+        }
+        
         startActivity(intent)
         finish()
     }
@@ -184,9 +198,16 @@ class ServerSetupActivity : AppCompatActivity() {
 
     private fun saveServerUrl(url: String) {
         val prefs = getSharedPreferences("BabySleepMonitor", MODE_PRIVATE)
-        prefs.edit()
-            .putString("server_url", url)
-            .putBoolean("has_connected", true)
-            .apply()
+        val editor = prefs.edit()
+        editor.putString("server_url", url)
+        editor.putBoolean("has_connected", true)
+        
+        // Save credentials if available from selected camera
+        selectedCamera?.let {
+            if (!it.username.isNullOrBlank()) editor.putString("rtsp_username", it.username)
+            if (!it.password.isNullOrBlank()) editor.putString("rtsp_password", it.password)
+        }
+        
+        editor.apply()
     }
 }

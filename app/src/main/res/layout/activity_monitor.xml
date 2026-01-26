@@ -137,7 +137,7 @@
                     android:contentDescription="Live video feed" />
 
                 <!-- RTSP Player View (for ONVIF cameras) -->
-                <androidx.media3.ui.PlayerView
+                <org.videolan.libvlc.util.VLCVideoLayout
                     android:id="@+id/rtspPlayerView"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"

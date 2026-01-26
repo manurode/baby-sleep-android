@@ -98,7 +98,7 @@ class CameraDiscoveryDialog : DialogFragment() {
     }
     
     private fun showAuthDialog(camera: OnvifCamera) {
-        val authDialog = CameraAuthDialog.newInstance(camera.hostname, camera.displayName)
+        val authDialog = CameraAuthDialog.newInstance(camera.hostname, camera.displayName, camera.xAddr)
         authDialog.setOnConnectedListener { connectedCamera ->
             // Auth was successful, pass the camera with stream URI to listener
             onCameraSelectedListener?.invoke(connectedCamera)

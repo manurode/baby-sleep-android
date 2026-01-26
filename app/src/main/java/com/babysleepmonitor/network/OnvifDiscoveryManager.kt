@@ -193,38 +193,65 @@ class OnvifDiscoveryManager(private val context: Context) {
     
     /**
      * Gets detailed device information and stream URI for a camera.
-     * @param hostname The camera's hostname or IP (with optional port, e.g., "192.168.1.100:80")
+     * @param connectionUrl The camera's connection URL (e.g., "http://192.168.1.100:80/onvif/device_service" or just "192.168.1.100")
      * @param username Optional username for authentication
      * @param password Optional password for authentication
      * @return OnvifCamera with device information and stream URI populated
      */
     suspend fun getCameraDetails(
-        hostname: String,
+        connectionUrl: String,
         username: String? = null,
         password: String? = null
     ): OnvifCamera = withContext(Dispatchers.IO) {
+        // Ensure we have a valid URL
+        var currentUrl = if (connectionUrl.startsWith("http")) connectionUrl else "http://$connectionUrl"
+        val originalHost = try { java.net.URI(currentUrl).host ?: connectionUrl } catch(e: Exception) { connectionUrl }
+        
         try {
-            Log.d(TAG, "Getting camera details for: $hostname")
+            Log.d(TAG, "Getting camera details for: $originalHost (URL: $currentUrl)")
             
-            // Ktor requires the scheme to be present
-            val url = if (hostname.startsWith("http")) hostname else "http://$hostname"
+            // Attempt connection
+            var device: OnvifDevice? = null
+            var lastError: Exception? = null
+
+            // Strategy: Try the provided URL first. If it fails and looks like a base URL, try appending standard ONVIF path.
+            val urlsToTry = mutableListOf(currentUrl)
+            if (!currentUrl.endsWith("/onvif/device_service") && !currentUrl.contains("/onvif/")) {
+                urlsToTry.add(if (currentUrl.endsWith("/")) "${currentUrl}onvif/device_service" else "$currentUrl/onvif/device_service")
+            }
+
+            for (url in urlsToTry) {
+                try {
+                    Log.d(TAG, "Connecting to ONVIF device at: $url")
+                    device = OnvifDevice.requestDevice(url, username, password)
+                    break
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to connect to $url: ${e.message}")
+                    lastError = e
+                }
+            }
             
-            Log.d(TAG, "Connecting to ONVIF device at: $url")
-            
-            // Standard connection attempt
-            val device = OnvifDevice.requestDevice(url, username, password)
-            
-            Log.d(TAG, "Successfully connected to device, fetching details...")
+            if (device == null) {
+                throw lastError ?: Exception("Failed to connect to any attempted URL")
+            }
+
+            Log.d(TAG, "Successfully initialized device wrapper, fetching details...")
             
             // 1. Try to get device information
             val deviceInfo = try {
                 device.getDeviceInformation()
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to get device info: ${e.message}")
+                if (e.message?.contains("400") == true || e.message?.contains("Unauthorized") == true) {
+                    Log.e(TAG, "Authentication failed. Attempting manual fallback...")
+                    // If we failed with 400/401, the library might be incompatible.
+                    // We can try a manual raw SOAP request later for the stream URI.
+                }
                 null
             }
             
             // 2. Try to get stream URI independently
+            // If the library failed authentication earlier (deviceInfo is null), we might still want to try manual fallback here.
             val streamUri = try {
                 val profiles = device.getProfiles()
                 if (profiles.isEmpty()) {
@@ -236,14 +263,13 @@ class OnvifDiscoveryManager(private val context: Context) {
                     
                     val uri = device.getStreamURI(profile)
                     
-                    // Fix: Some cameras return an internal IP (e.g., 0.0.0.0 or localhost) in the RTSP URL.
-                    // We should replace it with the camera's actual hostname.
                     if (uri.isNotEmpty()) {
                         val uriObj = java.net.URI(uri)
-                        val host = hostname.removePrefix("http://").removePrefix("https://").split(":")[0]
-                        if (uriObj.host != host) {
-                            Log.d(TAG, "Correcting stream URI host from ${uriObj.host} to $host")
-                            uri.replace(uriObj.host, host)
+                        val cleanHost = try { java.net.URI(currentUrl).host } catch (e: Exception) { originalHost.split(":")[0] }
+                        
+                        if (uriObj.host != cleanHost && cleanHost != null) {
+                            Log.d(TAG, "Correcting stream URI host from ${uriObj.host} to $cleanHost")
+                            uri.replace(uriObj.host, cleanHost)
                         } else {
                             uri
                         }
@@ -252,24 +278,36 @@ class OnvifDiscoveryManager(private val context: Context) {
                     }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to get stream URI: ${e.message}")
-                null
+                Log.w(TAG, "Library failed to get stream URI: ${e.message}. Attempting manual SOAP fallback.")
+                
+                // MANUAL FALLBACK: Try raw SOAP request if library fails
+                if (username != null && password != null) {
+                    try {
+                         getStreamUriManual(currentUrl, username, password)
+                    } catch (manualEx: Exception) {
+                         Log.e(TAG, "Manual fallback also failed: ${manualEx.message}")
+                         null
+                    }
+                } else {
+                    null
+                }
             }
             
             OnvifCamera(
-                hostname = hostname,
+                hostname = originalHost, 
                 manufacturer = deviceInfo?.manufacturer,
                 model = deviceInfo?.model,
                 firmwareVersion = deviceInfo?.firmwareVersion,
                 serialNumber = deviceInfo?.serialNumber,
                 streamUri = streamUri,
-                xAddr = hostname
+                xAddr = currentUrl,
+                username = username,
+                password = password
             )
 
         } catch (e: Exception) {
             Log.e(TAG, "Critical failure getting camera details: ${e.message}", e)
-            // Return basic camera info so user can at least see it failed but exists
-            OnvifCamera(hostname = hostname, xAddr = hostname)
+            OnvifCamera(hostname = originalHost, xAddr = connectionUrl, username = username, password = password)
         }
     }
     
@@ -290,7 +328,10 @@ class OnvifDiscoveryManager(private val context: Context) {
         
         basicCameras.map { basicCamera ->
             try {
-                val fullCamera = getCameraDetails(basicCamera.hostname, username, password)
+                // Use the full XAddr if available for best connection success
+                val connectionUrl = if (basicCamera.xAddr.isNotBlank()) basicCamera.xAddr else basicCamera.hostname
+                
+                val fullCamera = getCameraDetails(connectionUrl, username, password)
                 onCameraFound(fullCamera)
                 fullCamera
             } catch (e: Exception) {
@@ -298,6 +339,14 @@ class OnvifDiscoveryManager(private val context: Context) {
                 onCameraFound(basicCamera)
                 basicCamera
             }
+        }
+    }
+    /**
+     * Helper to call the manual client on IO thread
+     */
+    private suspend fun getStreamUriManual(url: String, username: String, password: String): String? {
+        return withContext(Dispatchers.IO) {
+            ManualOnvifClient.getStreamUri(url, username, password)
         }
     }
 }
