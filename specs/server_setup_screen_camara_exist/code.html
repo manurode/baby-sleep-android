@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Saved Camera Discovery View</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#00dcb4",
+                        "primary-dark": "#00b594",
+                        "background-light": "#F3F4F6",
+                        "background-dark": "#0B0C10",
+                        "card-light": "#FFFFFF",
+                        "card-dark": "#16181f",
+                        "text-light": "#1F2937",
+                        "text-dark": "#E5E7EB",
+                        "text-muted-light": "#6B7280",
+                        "text-muted-dark": "#9CA3AF",
+                    },
+                    fontFamily: {
+                        display: ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.75rem",
+                        xl: "1rem",
+                        "2xl": "1.5rem",
+                        "3xl": "2rem",
+                    },
+                    boxShadow: {
+                        'glow': '0 0 20px rgba(0, 220, 180, 0.15)',
+                        'glow-lg': '0 0 40px rgba(0, 220, 180, 0.3)',
+                    },
+                    animation: {
+                        'ping-slow': 'ping 3s cubic-bezier(0, 0, 0.2, 1) infinite',
+                    }
+                },
+            },
+        };
+    </script>
+<style>
+        body {
+            min-height: max(600px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased min-h-screen flex flex-col items-center justify-center relative overflow-hidden transition-colors duration-300">
+<div class="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+<div class="absolute -top-32 -left-32 w-96 h-96 bg-primary/10 dark:bg-primary/5 rounded-full blur-3xl"></div>
+<div class="absolute top-1/2 -right-32 w-80 h-80 bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-3xl"></div>
+</div>
+<main class="w-full max-w-md px-6 py-8 flex flex-col h-full justify-between relative z-10">
+<div class="flex flex-col items-center mt-6 space-y-4">
+<div class="w-16 h-16 rounded-2xl bg-card-light dark:bg-card-dark flex items-center justify-center shadow-md ring-1 ring-gray-100 dark:ring-gray-800">
+<span class="material-icons-round text-3xl text-primary">child_care</span>
+</div>
+<div class="text-center space-y-2">
+<h1 class="text-2xl font-bold text-text-light dark:text-text-dark tracking-tight">
+                    Welcome Back
+                </h1>
+<p class="text-text-muted-light dark:text-text-muted-dark text-sm max-w-xs mx-auto leading-relaxed">
+                    We found a previously saved camera on your network.
+                </p>
+</div>
+</div>
+<div class="flex-1 flex flex-col items-center justify-center w-full py-6">
+<div class="w-full bg-card-light dark:bg-card-dark rounded-3xl p-6 shadow-xl ring-1 ring-gray-100 dark:ring-gray-800 relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+<div class="flex flex-col items-center text-center relative z-10">
+<div class="w-24 h-24 rounded-full bg-gray-50 dark:bg-gray-800/50 flex items-center justify-center mb-4 relative">
+<span class="absolute top-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-card-dark"></span>
+<span class="material-icons-round text-4xl text-gray-400 dark:text-gray-500">videocam</span>
+</div>
+<h2 class="text-xl font-bold text-text-light dark:text-text-dark mb-1">192.168.1.145</h2>
+<p class="text-xs font-medium text-primary mb-6 bg-primary/10 px-3 py-1 rounded-full">Online</p>
+<button class="w-full py-3.5 px-6 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl shadow-lg shadow-primary/25 transition-all active:scale-[0.98] flex items-center justify-center space-x-2">
+<span>Connect Now</span>
+<span class="material-icons-round text-lg">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="flex flex-col items-center w-full mt-8 space-y-3">
+<button class="text-sm font-medium text-text-muted-light dark:text-text-muted-dark hover:text-primary dark:hover:text-primary transition-colors flex items-center space-x-2 group px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 border border-transparent hover:border-gray-200 dark:hover:border-white/10">
+<span class="material-icons-round text-lg group-hover:rotate-45 transition-transform duration-300">radar</span>
+<span>Discover New Cameras</span>
+</button>
+<button class="text-xs font-medium text-text-muted-light/80 dark:text-text-muted-dark/80 hover:text-primary dark:hover:text-primary transition-colors underline decoration-dotted underline-offset-4">
+    Connect Manually
+</button>
+</div>
+</div>
+<div class="w-full mb-2">
+<div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 flex items-start space-x-3 border border-blue-100 dark:border-blue-800/30">
+<span class="material-icons-round text-blue-500 mt-0.5">wifi_find</span>
+<div class="flex-1">
+<p class="text-sm font-medium text-blue-800 dark:text-blue-300">Need Help?</p>
+<p class="text-xs text-blue-600 dark:text-blue-400 mt-1 leading-normal">
+                        Make sure your camera is powered on and connected to the same Wi-Fi network as this device.
+                    </p>
+</div>
+</div>
+</div>
+</main>
+<div class="w-full h-6 shrink-0"></div>
+</body></html>

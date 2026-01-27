@@ -48,7 +48,14 @@ class ServerSetupActivity : AppCompatActivity() {
     private lateinit var manualIpInput: EditText
     private lateinit var manualPortInput: EditText
     private lateinit var manualStartButton: Button
+
     private lateinit var manualCancelButton: Button
+
+    // Saved View
+    private lateinit var tvSavedIp: TextView
+    private lateinit var btnConnectSoSaved: View
+    private lateinit var btnDiscoverNew: View
+    private lateinit var btnConnectManuallySaved: View
 
     private var selectedCamera: OnvifCamera? = null
 
@@ -56,6 +63,7 @@ class ServerSetupActivity : AppCompatActivity() {
         const val VIEW_DISCOVERY = 0
         const val VIEW_LOGIN = 1
         const val VIEW_MANUAL = 2
+        const val VIEW_SAVED = 3
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,6 +98,12 @@ class ServerSetupActivity : AppCompatActivity() {
         manualPortInput = findViewById(R.id.manualPortInput)
         manualStartButton = findViewById(R.id.manualStartButton)
         manualCancelButton = findViewById(R.id.manualCancelButton)
+        
+        // Saved Include
+        tvSavedIp = findViewById(R.id.tvSavedIp)
+        btnConnectSoSaved = findViewById(R.id.btnConnectSoSaved)
+        btnDiscoverNew = findViewById(R.id.btnDiscoverNew)
+        btnConnectManuallySaved = findViewById(R.id.btnConnectManuallySaved)
     }
 
     private fun setupListeners() {
@@ -118,8 +132,32 @@ class ServerSetupActivity : AppCompatActivity() {
             handleManualConnection()
         }
         
-        manualCancelButton.setOnClickListener {
+    manualCancelButton.setOnClickListener {
             viewFlipper.displayedChild = VIEW_DISCOVERY
+        }
+        
+        // Saved Actions
+        btnConnectSoSaved.setOnClickListener {
+            val prefs = getSharedPreferences("BabySleepMonitor", MODE_PRIVATE)
+            val url = prefs.getString("server_url", "") ?: ""
+            val user = prefs.getString("rtsp_username", "") ?: ""
+            val pass = prefs.getString("rtsp_password", "") ?: ""
+            
+            if (url.isNotEmpty()) {
+                navigateToMonitor(url, user, pass)
+            } else {
+                Toast.makeText(this, "No saved credentials found", Toast.LENGTH_SHORT).show()
+                viewFlipper.displayedChild = VIEW_DISCOVERY
+            }
+        }
+        
+        btnDiscoverNew.setOnClickListener {
+            viewFlipper.displayedChild = VIEW_DISCOVERY
+        }
+        
+        btnConnectManuallySaved.setOnClickListener {
+            // Pre-fill manual inputs if possible (already handled in loadSavedServerUrl)
+            viewFlipper.displayedChild = VIEW_MANUAL
         }
     }
     
@@ -311,6 +349,23 @@ class ServerSetupActivity : AppCompatActivity() {
                     manualIpInput.setText(parts[0])
                     if (parts.size > 1) manualPortInput.setText(parts[1])
                 }
+            }
+            
+            // Check if we should show the "Welcome Back" saved screen
+            val hasConnected = prefs.getBoolean("has_connected", false)
+            if (hasConnected) {
+                // Formatting IP for display (simple extraction)
+                var displayIp = savedUrl
+                    .removePrefix("rtsp://")
+                    .removePrefix("http://")
+                    .removePrefix("https://")
+                if (displayIp.contains("@")) {
+                     displayIp = displayIp.split("@").last()
+                }
+                displayIp = displayIp.split(":")[0].split("/")[0]
+                
+                tvSavedIp.text = displayIp
+                viewFlipper.displayedChild = VIEW_SAVED
             }
         }
     }

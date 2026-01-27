@@ -25,6 +25,11 @@
             android:id="@+id/viewManual"
             layout="@layout/view_server_setup_manual" />
 
+        <!-- Child 3: Saved Camera Found -->
+        <include
+            android:id="@+id/viewSaved"
+            layout="@layout/view_server_setup_saved" />
+
     </ViewFlipper>
 
 </LinearLayout>
