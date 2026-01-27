@@ -6,6 +6,11 @@ import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.*
 import org.opencv.imgproc.Imgproc
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.objects.ObjectDetection
+import com.google.mlkit.vision.objects.ObjectDetector
+import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
 
 /**
  * Port of Python VideoCamera motion detection logic.
@@ -14,6 +19,14 @@ class MotionDetector {
     private val TAG = "MotionDetector"
     private var lastFrame: Mat? = null
     private val clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
+
+    private val objectDetector: ObjectDetector = ObjectDetection.getClient(
+        ObjectDetectorOptions.Builder()
+            .setDetectorMode(ObjectDetectorOptions.STREAM_MODE)
+            .enableMultipleObjects()
+            .enableClassification()
+            .build()
+    )
     
     // Normalized ROI (0.0 - 1.0)
     var roi: Rect2d? = null
@@ -71,8 +84,77 @@ class MotionDetector {
         
         // 6. Dilate
         Imgproc.dilate(thresh, thresh, Mat(), Point(-1.0, -1.0), 2)
+
+        // 7. Object Detection Masking
+        val inputImage = InputImage.fromBitmap(bitmap, 0)
+        try {
+            val task = objectDetector.process(inputImage)
+            val detectedObjects = Tasks.await(task)
+
+            val objectMask = Mat.zeros(thresh.size(), thresh.type())
+
+            if (detectedObjects.isNotEmpty()) {
+                var foundCount = 0
+                for (obj in detectedObjects) {
+                    val rect = obj.boundingBox
+                    
+                    val rectArea = rect.width() * rect.height()
+                    val frameArea = width * height
+                    val areaPercent = (rectArea.toDouble() / frameArea) * 100
+                    
+                    // Filter: Ignore objects that are too small (like timestamps)
+                    // Increased threshold to 2.0% to filter out small artifacts like timestamps more aggressively.
+                    // A baby or person should be significantly larger than 2% of the frame.
+                    if (areaPercent < 2.0) {
+                        Log.d(TAG, "Ignored object (too small): area=${String.format("%.2f", areaPercent)}%, rect=$rect")
+                        continue
+                    }
+
+                    // Filter: Ignore objects with extreme aspect ratios (likely text banners/timestamps)
+                    val aspectRatio = rect.width().toDouble() / rect.height().toDouble()
+                    if (aspectRatio > 5.0 || aspectRatio < 0.2) {
+                        Log.d(TAG, "Ignored object (aspect ratio): ratio=${String.format("%.2f", aspectRatio)}, rect=$rect")
+                        continue
+                    }
+
+                    // Log valid detection
+                    val labels = obj.labels.joinToString { "${it.text} (${it.confidence})" }
+                    Log.d(TAG, "Accepted object: area=${String.format("%.2f", areaPercent)}%, ratio=${String.format("%.2f", aspectRatio)}, labels=[$labels]")
+
+                    val x = rect.left.coerceAtLeast(0)
+                    val y = rect.top.coerceAtLeast(0)
+                    val w = (rect.width()).coerceAtMost(width - x)
+                    val h = (rect.height()).coerceAtMost(height - y)
+                    Imgproc.rectangle(objectMask, Rect(x, y, w, h), Scalar(255.0), -1)
+                    foundCount++
+                }
+                
+                if (foundCount > 0) {
+                    // Mask the threshold image: keep only motion inside objects
+                    val tempWithObject = Mat()
+                    Core.bitwise_and(thresh, objectMask, tempWithObject)
+                    tempWithObject.copyTo(thresh)
+                    tempWithObject.release()
+                } else {
+                    // All detected objects were filtered out (likely noise/timestamps)
+                    Log.d(TAG, "No valid objects found after filtering.")
+                    thresh.setTo(Scalar(0.0))
+                }
+            } else {
+                // No objects -> No meaningful motion
+                thresh.setTo(Scalar(0.0))
+            }
+            objectMask.release()
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Object detection error: ${e.message}")
+            // Fallback: If detection fails, suppress motion to avoid false positives from timestamp
+            thresh.setTo(Scalar(0.0))
+        }
+
+        // 8. ROI Masking (renamed from 7)
         
-        // 7. ROI Masking
+        // 8. ROI Masking
         roi?.let { r ->
             // Convert normalized ROI to pixels
             val x = (r.x * width).toInt()
@@ -98,29 +180,48 @@ class MotionDetector {
             temp.release()
         }
         
-        // 8. Motion Score
-        val motionScore = Core.sumElems(thresh).`val`[0]
+        // 9. Motion Score
+        // Recalculate motion score based on what's left after filtering
+        // Note: We might want to filter small blobs BEFORE calculating the final score
         
-        // 9. Contours
+        // 10. Contours & Filtering
         val contours = ArrayList<MatOfPoint>()
         val hierarchy = Mat()
         Imgproc.findContours(thresh, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
         
         val boxes = ArrayList<android.graphics.Rect>()
+        var totalMotionArea = 0.0
+        
+        // Dynamic threshold: 0.1% of total area
+        // For 1920x1080 (~2MP), this is ~2000 pixels. 
+        // Timestamps are usually small changes.
+        val minContourArea = (width * height) * 0.001 
+        
+        val filteredThresh = Mat.zeros(thresh.size(), thresh.type())
+
         for (contour in contours) {
-            if (Imgproc.contourArea(contour) > 100) {
+            val area = Imgproc.contourArea(contour)
+            if (area > minContourArea) {
                 val r = Imgproc.boundingRect(contour)
                 boxes.add(android.graphics.Rect(r.x, r.y, r.x + r.width, r.y + r.height))
+                
+                // Redraw this valid contour onto a new mask to calculate accurate score
+                Imgproc.drawContours(filteredThresh, listOf(contour), -1, Scalar(255.0), -1)
+                totalMotionArea += area
             }
             contour.release()
         }
+        
+        // Update the motion score based on the Filtered Large Blobs only
+        val motionScore = Core.sumElems(filteredThresh).`val`[0]
+        filteredThresh.release()
         
         // Cleanup
         lastFrame!!.release()
         lastFrame = gray
         currentFrame.release()
         diff.release()
-        thresh.release()
+        thresh.release() // Original thresh
         hierarchy.release()
         
         return Result(motionScore, boxes, width, height)

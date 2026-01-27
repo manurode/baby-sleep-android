@@ -225,10 +225,11 @@ class RtspPlayerManager(private val context: Context) {
      * Returns null if player is not ready or texture view is unavailable.
      */
     fun getCurrentFrame(): Bitmap? {
-        if (videoLayout == null) return null
-        
-        // Find the inner TextureView (LibVLC adds it dynamically)
-        return findTextureView(videoLayout!!)?.getBitmap()
+        val view = videoLayout?.let { findTextureView(it) } ?: return null
+        // Create a software-backed bitmap to avoid HWUI "Unable to draw content from GPU" errors
+        // and ensures compatibility with OpenCV and ML Kit.
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        return view.getBitmap(bitmap)
     }
 
     private fun findTextureView(group: ViewGroup): TextureView? {
