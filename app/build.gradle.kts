@@ -69,6 +69,9 @@ dependencies {
     // OpenCV for Image Processing
     implementation("com.quickbirdstudios:opencv:4.5.3.0")
 
+    // ML Kit Object Detection
+    implementation("com.google.mlkit:object-detection:17.0.1")
+
     // Room Database
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
