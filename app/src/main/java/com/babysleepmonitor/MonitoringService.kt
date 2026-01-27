@@ -102,8 +102,8 @@ class MonitoringService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         serverUrl = intent?.getStringExtra("server_url") ?: ""
         
-        if (serverUrl.isEmpty()) {
-            Log.e(TAG, "No server URL provided, stopping service")
+        if (serverUrl.isEmpty() || !serverUrl.startsWith("http", ignoreCase = true)) {
+            Log.e(TAG, "Invalid server URL (must be HTTP/HTTPS) or empty: $serverUrl. Stopping service.")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -199,10 +199,15 @@ class MonitoringService : Service() {
     private fun checkServerStatus() {
         val statusUrl = if (serverUrl.endsWith("/")) "${serverUrl}status" else "$serverUrl/status"
         
-        val request = Request.Builder()
-            .url(statusUrl)
-            .get()
-            .build()
+        val request = try {
+            Request.Builder()
+                .url(statusUrl)
+                .get()
+                .build()
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "Failed to build request for URL: $statusUrl", e)
+            return
+        }
 
         Thread {
             try {

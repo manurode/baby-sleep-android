@@ -1027,6 +1027,12 @@ class MonitorActivity : AppCompatActivity() {
     }
 
     private fun startMonitoringService() {
+        // MonitoringService relies on HTTP polling. Do not start it for RTSP or other protocols.
+        if (!serverUrl.startsWith("http", ignoreCase = true)) {
+            Log.i(TAG, "Skipping MonitoringService start for non-HTTP URL: $serverUrl")
+            return
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) 
                 != PackageManager.PERMISSION_GRANTED) {
