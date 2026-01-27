@@ -204,9 +204,13 @@ class SleepManager(
     fun update(motionScore: Double): SleepState {
         val currentTime = timeProvider() / 1000.0
         
+        log("Update: motionScore=$motionScore")
+        
         // Warm-up check
         if (sessionStartTime != null && (currentTime - sessionStartTime!!) < WARMUP_DURATION) {
              currentState = SleepState.CALIBRATING
+             // Only log once per second or if state changes to avoid spam? 
+             // For now, logging every update might be too much, but requested.
              return currentState
         }
 
@@ -219,6 +223,7 @@ class SleepManager(
         
         // Analysis
         val analysis = analyzeBuffer(currentTime)
+        log("Analysis: $analysis")
         
         // Target State
         val targetState = determineState(analysis)
@@ -287,12 +292,14 @@ class SleepManager(
             
             // Note: If this persists for > 5s, handleTransition will promote to AWAKE.
             // Initially we treat it as SPASM (Transient high motion).
+            log("StateLogic: RecentMax ($recentMax) > HIGH ($HIGH_MOTION_THRESHOLD) -> SPASM")
             return SleepState.SPASM
         }
         
         // 2. No Breathing Priority
         // Low motion + No BPM for > 20s
         if (mean < NO_MOTION_THRESHOLD && bpm == 0.0) {
+            log("StateLogic: Mean ($mean) < LOW + No BPM -> NO_BREATHING")
             return SleepState.NO_BREATHING
         }
         
@@ -301,6 +308,7 @@ class SleepManager(
         val isRemMotion = mean in REM_SLEEP_RANGE
         val isRemBpm = (bpm in 35.0..50.0) && (variability > breathingAnalyzer.HIGH_VARIABILITY_THRESHOLD)
         if (isRemMotion || isRemBpm) {
+            log("StateLogic: REM detected (Motion: $isRemMotion, BPM: $isRemBpm)")
             return SleepState.REM_SLEEP
         }
         
@@ -311,11 +319,13 @@ class SleepManager(
         val isQuiet = max30 < 800_000.0 // Quiet means staying below REM/High thresholds? Let's use 800k.
         
         if ((isDeepMotion || isDeepBpm) && isQuiet) {
+            log("StateLogic: Deep Sleep (Motion: $isDeepMotion, BPM: $isDeepBpm, Quiet: $isQuiet)")
             return SleepState.DEEP_SLEEP
         }
         
         // Fallback
-        return if (currentState != SleepState.UNKNOWN && currentState != SleepState.CALIBRATING) currentState else SleepState.LIGHT_SLEEP
+        log("StateLogic: Fallback to LIGHT_SLEEP")
+        return SleepState.LIGHT_SLEEP
     }
     
     private fun handleTransition(target: SleepState, currentTime: Double) {
@@ -347,6 +357,7 @@ class SleepManager(
         if (pendingState != target) {
             pendingState = target
             pendingStateTime = currentTime
+            log("Transition: PendingState changed to $target. Waiting $confirmTime s")
         }
         
         if (pendingState == target && (currentTime - pendingStateTime!!) >= confirmTime) {

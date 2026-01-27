@@ -117,10 +117,6 @@ class MotionDetector {
                         continue
                     }
 
-                    // Log valid detection
-                    val labels = obj.labels.joinToString { "${it.text} (${it.confidence})" }
-                    Log.d(TAG, "Accepted object: area=${String.format("%.2f", areaPercent)}%, ratio=${String.format("%.2f", aspectRatio)}, labels=[$labels]")
-
                     val x = rect.left.coerceAtLeast(0)
                     val y = rect.top.coerceAtLeast(0)
                     val w = (rect.width()).coerceAtMost(width - x)
