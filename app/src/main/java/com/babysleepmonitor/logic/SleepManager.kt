@@ -1,6 +1,8 @@
 package com.babysleepmonitor.logic
 
 import android.util.Log
+
+
 import java.util.LinkedList
 import java.util.UUID
 import kotlin.math.max
@@ -13,11 +15,18 @@ import com.babysleepmonitor.data.db.SleepDao
 import com.babysleepmonitor.data.db.SleepSessionEntity
 
 
+interface ISleepLogger {
+    fun i(tag: String, msg: String)
+    fun e(tag: String, msg: String, tr: Throwable?)
+}
+
 enum class SleepState(val value: String) {
     UNKNOWN("unknown"),
+    CALIBRATING("calibrating"),
     NO_BREATHING("no_breathing"),
     DEEP_SLEEP("deep_sleep"),
     LIGHT_SLEEP("light_sleep"),
+    REM_SLEEP("rem_sleep"),
     SPASM("spasm"),
     AWAKE("awake")
 }
@@ -38,8 +47,8 @@ class BreathingAnalyzer {
     private val BREATH_PEAK_THRESHOLD = 50_000.0
     private val MIN_BREATH_INTERVAL = 1.0
     private val MAX_BREATH_INTERVAL = 5.0
-    private val LOW_VARIABILITY_THRESHOLD = 0.15
-    private val HIGH_VARIABILITY_THRESHOLD = 0.30
+    val LOW_VARIABILITY_THRESHOLD = 0.10
+    val HIGH_VARIABILITY_THRESHOLD = 0.20
 
     private val breathTimestamps = LinkedList<Double>() // last 100
     private val breathIntervals = LinkedList<Double>() // last 50
@@ -117,20 +126,24 @@ class BreathingAnalyzer {
 
 class SleepManager(
     private val sleepDao: SleepDao,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val logger: ISleepLogger? = null,
+    private val timeProvider: () -> Long = { System.currentTimeMillis() }
 ) {
     private val TAG = "SleepManager"
     
     // Thresholds
     private val NO_MOTION_THRESHOLD = 10_000.0
-    private val BREATHING_LOW = 10_000.0
-    private val MOVEMENT_THRESHOLD = 5_000_000.0
-    private val AWAKE_THRESHOLD = 10_000_000.0
+    private val HIGH_MOTION_THRESHOLD = 3_000_000.0
+    private val DEEP_SLEEP_RANGE = 100_000.0..800_000.0
+    private val REM_SLEEP_RANGE = 800_000.0..2_000_000.0
     
     // Timing
     private val BUFFER_DURATION = 60.0
     private val ANALYSIS_WINDOW = 10.0
-    private val SPASM_WINDOW = 5.0
+    private val WARMUP_DURATION = 10.0
+    private val CONFIRMATION_TIME_ALARM = 20.0
+    private val CONFIRMATION_TIME_AWAKE = 5.0
     
     // State Logic
     private val breathingAnalyzer = BreathingAnalyzer()
@@ -156,7 +169,7 @@ class SleepManager(
     }
     
     fun startSession() {
-        sessionStartTime = System.currentTimeMillis() / 1000.0
+        sessionStartTime = timeProvider() / 1000.0
         breathingAnalyzer.reset()
         motionBuffer.clear()
         currentState = SleepState.UNKNOWN
@@ -166,9 +179,9 @@ class SleepManager(
 
     fun stopSession() {
         if (sessionStartTime != null) {
-             val endTime = System.currentTimeMillis() / 1000.0
+             val endTime = timeProvider() / 1000.0
              val duration = (endTime - sessionStartTime!!).toLong()
-             Log.i(TAG, "Session stopped. Duration: $duration s")
+             log("Session stopped. Duration: $duration s")
 
              scope.launch(Dispatchers.IO) {
                  val session = SleepSessionEntity(
@@ -180,17 +193,23 @@ class SleepManager(
                  )
                  try {
                      sleepDao.insertSession(session)
-                     Log.i(TAG, "Session saved to DB")
+                     log("Session saved to DB")
                  } catch (e: Exception) {
-                     Log.e(TAG, "Failed to save session", e)
+                     logError("Failed to save session", e)
                  }
              }
         }
     }
     
     fun update(motionScore: Double): SleepState {
-        val currentTime = System.currentTimeMillis() / 1000.0
+        val currentTime = timeProvider() / 1000.0
         
+        // Warm-up check
+        if (sessionStartTime != null && (currentTime - sessionStartTime!!) < WARMUP_DURATION) {
+             currentState = SleepState.CALIBRATING
+             return currentState
+        }
+
         // Buffer
         motionBuffer.add(currentTime to motionScore)
         cleanBuffer(currentTime)
@@ -224,16 +243,27 @@ class SleepManager(
         val windowStart = currentTime - ANALYSIS_WINDOW
         val windowScores = motionBuffer.filter { it.first >= windowStart }.map { it.second }
         
+        val recentStart = currentTime - 2.0 // Short window for spikes
+        val recentScores = motionBuffer.filter { it.first >= recentStart }.map { it.second }
+
+        val recentMean = if (recentScores.isNotEmpty()) recentScores.average() else 0.0
+        val recentMax = if (recentScores.isNotEmpty()) recentScores.maxOrNull() ?: 0.0 else 0.0
+        
+        val quietStart = currentTime - 30.0
+        val quietScores = motionBuffer.filter { it.first >= quietStart }.map { it.second }
+        val max30 = if (quietScores.isNotEmpty()) quietScores.maxOrNull() ?: 0.0 else 0.0
+
         if (windowScores.isEmpty()) return emptyMap()
         
         val mean = windowScores.average()
-        val highMovementRatio = windowScores.count { it > MOVEMENT_THRESHOLD }.toDouble() / windowScores.size
-        val isNoMotion = mean < NO_MOTION_THRESHOLD
-        
+
         return mapOf(
             "mean" to mean,
-            "highMovementRatio" to highMovementRatio,
-            "isNoMotion" to isNoMotion,
+            "recentMean" to recentMean,
+            "recentMax" to recentMax,
+            "max30" to max30,
+            "bpm" to breathingAnalyzer.getBreathingRate(),
+            "variability" to breathingAnalyzer.getVariability(),
             "sleepPhase" to breathingAnalyzer.getSleepPhase()
         )
     }
@@ -241,43 +271,86 @@ class SleepManager(
     private fun determineState(analysis: Map<String, Any>): SleepState {
         if (analysis.isEmpty()) return currentState
         
-        val isNoMotion = analysis["isNoMotion"] as Boolean
-        if (isNoMotion) return SleepState.NO_BREATHING
-        
         val mean = analysis["mean"] as Double
-        val highRatio = analysis["highMovementRatio"] as Double
+
+        val recentMean = analysis["recentMean"] as Double
+        val recentMax = analysis["recentMax"] as Double
+        val max30 = analysis["max30"] as Double
+        val bpm = analysis["bpm"] as Double
+        val variability = analysis["variability"] as Double
         
-        if (highRatio > 0.5 && mean > MOVEMENT_THRESHOLD) {
-            return SleepState.AWAKE
+        // 1. Awake / Spasm Priority
+        // High motion detected recently
+        if (recentMax > HIGH_MOTION_THRESHOLD) {
+            // If already AWAKE, stay AWAKE
+            if (currentState == SleepState.AWAKE) return SleepState.AWAKE
+            
+            // Note: If this persists for > 5s, handleTransition will promote to AWAKE.
+            // Initially we treat it as SPASM (Transient high motion).
+            return SleepState.SPASM
         }
         
-        if (mean < AWAKE_THRESHOLD) {
-            return when (analysis["sleepPhase"] as String) {
-                "deep" -> SleepState.DEEP_SLEEP
-                "light", "transitional" -> SleepState.LIGHT_SLEEP
-                else -> if (currentState == SleepState.UNKNOWN) SleepState.LIGHT_SLEEP else currentState
-            }
+        // 2. No Breathing Priority
+        // Low motion + No BPM for > 20s
+        if (mean < NO_MOTION_THRESHOLD && bpm == 0.0) {
+            return SleepState.NO_BREATHING
         }
         
-        return if (currentState != SleepState.UNKNOWN) currentState else SleepState.LIGHT_SLEEP
+        // 3. REM Sleep
+        // Motion 800k-2M OR (BPM 35-50 + Unstable)
+        val isRemMotion = mean in REM_SLEEP_RANGE
+        val isRemBpm = (bpm in 35.0..50.0) && (variability > breathingAnalyzer.HIGH_VARIABILITY_THRESHOLD)
+        if (isRemMotion || isRemBpm) {
+            return SleepState.REM_SLEEP
+        }
+        
+        // 4. Deep Sleep
+        // Motion 100k-800k OR (BPM 25-35 + Stable) ... PLUS 30s quiet
+        val isDeepMotion = mean in DEEP_SLEEP_RANGE
+        val isDeepBpm = (bpm in 25.0..35.0) && (variability < breathingAnalyzer.LOW_VARIABILITY_THRESHOLD)
+        val isQuiet = max30 < 800_000.0 // Quiet means staying below REM/High thresholds? Let's use 800k.
+        
+        if ((isDeepMotion || isDeepBpm) && isQuiet) {
+            return SleepState.DEEP_SLEEP
+        }
+        
+        // Fallback
+        return if (currentState != SleepState.UNKNOWN && currentState != SleepState.CALIBRATING) currentState else SleepState.LIGHT_SLEEP
     }
     
     private fun handleTransition(target: SleepState, currentTime: Double) {
         if (target == currentState) {
+            
+            // Logic to promote SPASM to AWAKE if sustained
+        if (currentState == SleepState.SPASM && target == SleepState.SPASM) {
+                if (currentTime - stateStartTime > CONFIRMATION_TIME_AWAKE) {
+                    executeTransition(SleepState.AWAKE, currentTime)
+                }
+            }
+            
             pendingState = null
             return
         }
         
-        // Simple hysteresis for now (3s confirmation)
-        val confirmTime = 3.0
-        
-        if (pendingState == target) {
-            if (currentTime - pendingStateTime!! >= confirmTime) {
-                executeTransition(target, currentTime)
-            }
+        var confirmTime = 3.0
+        if (currentState == SleepState.CALIBRATING) {
+            confirmTime = 0.0
         } else {
+            when (target) {
+                SleepState.NO_BREATHING -> confirmTime = CONFIRMATION_TIME_ALARM
+                SleepState.AWAKE -> confirmTime = CONFIRMATION_TIME_AWAKE
+                SleepState.SPASM -> confirmTime = 0.5 // Quick reaction for transient
+                else -> confirmTime = 3.0
+            }
+        }
+        
+        if (pendingState != target) {
             pendingState = target
             pendingStateTime = currentTime
+        }
+        
+        if (pendingState == target && (currentTime - pendingStateTime!!) >= confirmTime) {
+             executeTransition(target, currentTime)
         }
     }
     
@@ -292,9 +365,18 @@ class SleepManager(
             wakeUpCount++
         }
         
-        Log.i(TAG, "Transition: $oldState -> $newState")
+        log("Transition: $oldState -> $newState")
     }
-    
+
+    private fun log(msg: String) {
+        if (logger != null) logger.i(TAG, msg)
+        else Log.i(TAG, msg)
+    }
+
+    private fun logError(msg: String, tr: Throwable?) {
+        if (logger != null) logger.e(TAG, msg, tr)
+        else Log.e(TAG, msg, tr)
+    }
     private fun updateMetrics(currentTime: Double) {
         if (lastUpdateTime > 0) {
             val delta = currentTime - lastUpdateTime
