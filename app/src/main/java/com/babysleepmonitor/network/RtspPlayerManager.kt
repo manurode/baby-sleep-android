@@ -107,23 +107,37 @@ class RtspPlayerManager(private val context: Context) {
                 }
             }
 
-            // Manually inject request credentials into URI if provided
+            // Manually inject request credentials into URI if provided and not already in URI
             // LibVLC handles rtsp://user:pass@host very well.
-            val finalUri = if (!username.isNullOrBlank() && !password.isNullOrBlank()) {
-                 try {
-                     val uriObj = Uri.parse(rtspUri)
-                     val scheme = uriObj.scheme ?: "rtsp"
-                     val host = uriObj.host ?: ""
-                     val port = if (uriObj.port != -1) ":${uriObj.port}" else ""
-                     val path = uriObj.path ?: ""
-                     val query = if (uriObj.query != null) "?${uriObj.query}" else ""
-                     
-                     val encUser = Uri.encode(username)
-                     val encPass = Uri.encode(password)
-                     
-                     "$scheme://$encUser:$encPass@$host$port$path$query"
-                 } catch (e: Exception) {
+            // Check if we have EITHER username OR password (some cameras might use blank user or blank pass)
+            val finalUri = if (!username.isNullOrBlank() || !password.isNullOrBlank()) {
+                 val user = username ?: ""
+                 val pass = password ?: ""
+                 
+                 if (rtspUri.contains(user) && rtspUri.contains(pass)) {
                      rtspUri
+                 } else {
+                     try {
+                         // Parse URI to inject credentials safely
+                         val uriObj = Uri.parse(rtspUri)
+                         val scheme = uriObj.scheme ?: "rtsp"
+                         val host = uriObj.host ?: ""
+                         val port = if (uriObj.port != -1) ":${uriObj.port}" else ""
+                         val path = uriObj.path ?: ""
+                         val query = if (uriObj.query != null) "?${uriObj.query}" else ""
+                         
+                         val encUser = Uri.encode(user)
+                         val encPass = Uri.encode(pass)
+                         
+                         "$scheme://$encUser:$encPass@$host$port$path$query"
+                     } catch (e: Exception) {
+                         // Fallback to simple string replacement if parsing fails
+                         Log.w(TAG, "URI parse failed, using simple injection")
+                         val schemeEnd = rtspUri.indexOf("://") + 3
+                         val scheme = rtspUri.substring(0, schemeEnd)
+                         val rest = rtspUri.substring(schemeEnd)
+                         "$scheme${Uri.encode(user)}:${Uri.encode(pass)}@$rest"
+                     }
                  }
             } else {
                 rtspUri

@@ -2,131 +2,166 @@ package com.babysleepmonitor
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.TextView
 import android.widget.Toast
+import android.widget.ViewFlipper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.babysleepmonitor.data.OnvifCamera
 import com.babysleepmonitor.network.ApiClient
+import com.babysleepmonitor.network.OnvifDiscoveryManager
 import com.babysleepmonitor.ui.CameraDiscoveryDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Server Setup screen for entering the server IP address and port.
- * Also supports ONVIF camera discovery for direct RTSP streaming.
- * Validates connection before proceeding to the main monitor screen.
+ * Server Setup screen with multi-step flow:
+ * 1. Discovery (or Manual Manual entry link)
+ * 2. Login (for discovered cameras)
+ * 3. Manual Entry (fallback)
  */
 class ServerSetupActivity : AppCompatActivity() {
 
-    private lateinit var ipAddressInput: EditText
-    private lateinit var portInput: EditText
-    private lateinit var startMonitoringButton: Button
-    private lateinit var cancelButton: Button
-    private lateinit var discoverCamerasButton: Button
+    private lateinit var viewFlipper: ViewFlipper
+    private lateinit var discoveryManager: OnvifDiscoveryManager
     
-    // Holds selected ONVIF camera (if any)
+    // Discovery View
+    private lateinit var btnStartDiscovery: View
+    private lateinit var discoveryProgressBar: ProgressBar
+    private lateinit var discoveryContent: View
+    private lateinit var manualConnectButton: View
+    
+    // Login View
+    private lateinit var tvCameraIp: TextView
+    private lateinit var etUsername: EditText
+    private lateinit var etPassword: EditText
+    private lateinit var btnConnect: Button
+    private lateinit var tvCancel: TextView
+    
+    // Manual View
+    private lateinit var manualIpInput: EditText
+    private lateinit var manualPortInput: EditText
+    private lateinit var manualStartButton: Button
+    private lateinit var manualCancelButton: Button
+
     private var selectedCamera: OnvifCamera? = null
+
+    companion object {
+        const val VIEW_DISCOVERY = 0
+        const val VIEW_LOGIN = 1
+        const val VIEW_MANUAL = 2
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_server_setup)
 
+        discoveryManager = OnvifDiscoveryManager(this)
+        
         initViews()
-        loadSavedServerUrl()
         setupListeners()
+        loadSavedServerUrl()
     }
 
     private fun initViews() {
-        ipAddressInput = findViewById(R.id.ipAddressInput)
-        portInput = findViewById(R.id.portInput)
-        startMonitoringButton = findViewById(R.id.startMonitoringButton)
-        cancelButton = findViewById(R.id.cancelButton)
-        discoverCamerasButton = findViewById(R.id.discoverCamerasButton)
-    }
-
-    private fun loadSavedServerUrl() {
-        val prefs = getSharedPreferences("BabySleepMonitor", MODE_PRIVATE)
-        val savedUrl = prefs.getString("server_url", "") ?: ""
-
-        // Parse saved URL to extract IP and port
-        if (savedUrl.isNotEmpty()) {
-            try {
-                // Handle RTSP URLs differently
-                if (savedUrl.startsWith("rtsp://")) {
-                    ipAddressInput.setText(savedUrl)
-                    portInput.setText("")
-                } else {
-                    val urlWithoutProtocol = savedUrl.removePrefix("http://").removePrefix("https://")
-                    val parts = urlWithoutProtocol.split(":")
-                    if (parts.isNotEmpty()) {
-                        ipAddressInput.setText(parts[0])
-                        if (parts.size > 1) {
-                            portInput.setText(parts[1])
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore parsing errors
-            }
-        }
+        viewFlipper = findViewById(R.id.viewFlipper)
+        
+        // Discovery Include
+        btnStartDiscovery = findViewById(R.id.btnStartDiscovery)
+        discoveryProgressBar = findViewById(R.id.discoveryProgressBar)
+        discoveryContent = findViewById(R.id.discoveryContent)
+        manualConnectButton = findViewById(R.id.manualConnectButton)
+        
+        // Login Include
+        tvCameraIp = findViewById(R.id.tvCameraIp)
+        etUsername = findViewById(R.id.etUsername)
+        etPassword = findViewById(R.id.etPassword)
+        btnConnect = findViewById(R.id.btnConnect)
+        tvCancel = findViewById(R.id.tvCancel)
+        
+        // Manual Include
+        manualIpInput = findViewById(R.id.manualIpInput)
+        manualPortInput = findViewById(R.id.manualPortInput)
+        manualStartButton = findViewById(R.id.manualStartButton)
+        manualCancelButton = findViewById(R.id.manualCancelButton)
     }
 
     private fun setupListeners() {
-        // ONVIF Camera Discovery button
-        discoverCamerasButton.setOnClickListener {
-            showCameraDiscoveryDialog()
+        // Discovery Actions
+        btnStartDiscovery.setOnClickListener {
+            startDiscovery()
         }
         
-        startMonitoringButton.setOnClickListener {
-            val ip = ipAddressInput.text.toString().trim()
-            val port = portInput.text.toString().trim().ifEmpty { "5000" }
-
-            if (ip.isEmpty()) {
-                Toast.makeText(this, "Please enter a server IP address", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            // Determine if this is an RTSP URL or HTTP server
-            val serverUrl = when {
-                ip.startsWith("rtsp://") -> ip
-                ip.startsWith("http://") || ip.startsWith("https://") -> ip
-                else -> "http://$ip:$port"
-            }
-            
-            // For RTSP, skip connection test and go directly to monitor
-            if (serverUrl.startsWith("rtsp://")) {
-                saveServerUrl(serverUrl)
-                navigateToMonitor(serverUrl)
-                return@setOnClickListener
-            }
-            
-            // Disable button and show loading state
-            startMonitoringButton.isEnabled = false
-            startMonitoringButton.text = "Connecting..."
-            
-            // Try to connect to the server
-            lifecycleScope.launch {
-                try {
-                    val connected = testConnection(serverUrl)
-                    
-                    if (connected) {
-                        // Save the server URL
-                        saveServerUrl(serverUrl)
-                        navigateToMonitor(serverUrl)
-                    } else {
-                        showConnectionError(serverUrl)
+        manualConnectButton.setOnClickListener {
+            viewFlipper.displayedChild = VIEW_MANUAL
+        }
+        
+        // Login Actions
+        btnConnect.setOnClickListener {
+            handleDiscoveredConnection()
+        }
+        
+        tvCancel.setOnClickListener {
+            // Cancel login, go back to discovery
+            selectedCamera = null
+            viewFlipper.displayedChild = VIEW_DISCOVERY
+        }
+        
+        // Manual Actions
+        manualStartButton.setOnClickListener {
+            handleManualConnection()
+        }
+        
+        manualCancelButton.setOnClickListener {
+            viewFlipper.displayedChild = VIEW_DISCOVERY
+        }
+    }
+    
+    private fun startDiscovery() {
+        setDiscoveryLoading(true)
+        
+        lifecycleScope.launch {
+            try {
+                // Short timeout for initial scan, we can use the dialog for full scan if needed
+                // But user wants logic: Finding 1 -> Login. Finding >1 -> Dialog.
+                
+                val cameras = discoveryManager.discoverCamerasWithDetails(timeoutMs = 3000)
+                setDiscoveryLoading(false)
+                
+                when {
+                    cameras.isEmpty() -> {
+                        Toast.makeText(this@ServerSetupActivity, "No cameras found. Try manual connection.", Toast.LENGTH_LONG).show()
                     }
-                } catch (e: Exception) {
-                    showConnectionError(serverUrl)
+                    cameras.size == 1 -> {
+                        onCameraSelected(cameras.first())
+                    }
+                    else -> {
+                        // Multiple cameras found, show dialog
+                        showCameraDiscoveryDialog()
+                    }
                 }
+            } catch (e: Exception) {
+                setDiscoveryLoading(false)
+                Toast.makeText(this@ServerSetupActivity, "Discovery error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
-
-        cancelButton.setOnClickListener {
-            finish()
+    }
+    
+    private fun setDiscoveryLoading(loading: Boolean) {
+        if (loading) {
+            btnStartDiscovery.isEnabled = false
+            discoveryContent.visibility = View.GONE
+            discoveryProgressBar.visibility = View.VISIBLE
+        } else {
+            btnStartDiscovery.isEnabled = true
+            discoveryContent.visibility = View.VISIBLE
+            discoveryProgressBar.visibility = View.GONE
         }
     }
     
@@ -141,43 +176,149 @@ class ServerSetupActivity : AppCompatActivity() {
     private fun onCameraSelected(camera: OnvifCamera) {
         selectedCamera = camera
         
-        // Populate the IP field with the RTSP stream URI if available
-        if (!camera.streamUri.isNullOrBlank()) {
-            ipAddressInput.setText(camera.streamUri)
-            portInput.setText("")
-            Toast.makeText(this, "Selected: ${camera.displayName}", Toast.LENGTH_SHORT).show()
-        } else if (camera.hostname.isNotBlank()) {
-            // Fallback to hostname if no stream URI
-            ipAddressInput.setText(camera.hostname)
-            Toast.makeText(this, "Camera found but no stream URI available. You may need to configure it manually.", Toast.LENGTH_LONG).show()
+        // Populate Login View
+        tvCameraIp.text = camera.hostname
+        if (!camera.username.isNullOrBlank()) etUsername.setText(camera.username)
+        if (!camera.password.isNullOrBlank()) etPassword.setText(camera.password)
+        
+        // Switch to Login View
+        viewFlipper.displayedChild = VIEW_LOGIN
+    }
+    
+    private fun handleDiscoveredConnection() {
+        val username = etUsername.text.toString().trim()
+        val password = etPassword.text.toString().trim()
+        
+        val camera = selectedCamera ?: return
+        
+        // Update credentials
+        camera.username = username
+        camera.password = password
+        
+        // Construct RTSP URL if we have one, otherwise use xAddr or hostname
+        // Ideally discoveryManager gave us a streamUri.
+        // If streamUri is missing, we might need to fetch it now with credentials? 
+        // Logic: "Validate inputs. Construct RTSP URL (with auth)."
+        
+        lifecycleScope.launch {
+            btnConnect.isEnabled = false
+            btnConnect.text = "Connecting..."
+            
+            try {
+                var streamUri = camera.streamUri
+                
+                // If we don't have a stream URI yet, or we need to re-fetch with new credentials
+                if (streamUri.isNullOrBlank() || (username.isNotEmpty() && password.isNotEmpty())) {
+                     // Try to get fresh details with these credentials
+                     val fullCamera = discoveryManager.getCameraDetails(
+                         connectionUrl = if (camera.xAddr.isNotBlank()) camera.xAddr else camera.hostname,
+                         username = username,
+                         password = password
+                     )
+                     if (!fullCamera.streamUri.isNullOrBlank()) {
+                         streamUri = fullCamera.streamUri
+                     }
+                }
+                
+                // Fallback construction if still null
+                if (streamUri.isNullOrBlank()) {
+                     streamUri = "rtsp://${camera.hostname}:8554/Streaming/Channels/101" // Generic fallback for Hikvision/similar
+                }
+                
+                // Inject credentials into URL if needed? 
+                // MonitorActivity handles credentials passed via Intent extras usually.
+                // But saving to preferences is also good.
+                
+                saveServerUrl(streamUri!!, username, password)
+                
+                // Proceed to Monitor
+                navigateToMonitor(streamUri, username, password)
+                
+            } catch (e: Exception) {
+                Toast.makeText(this@ServerSetupActivity, "Connection failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                btnConnect.isEnabled = true
+                btnConnect.text = "Connect"
+            }
+        }
+    }
+
+    private fun handleManualConnection() {
+        val ip = manualIpInput.text.toString().trim()
+        val port = manualPortInput.text.toString().trim().ifEmpty { "5000" }
+
+        if (ip.isEmpty()) {
+            Toast.makeText(this, "Please enter a server IP address", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Determine if this is an RTSP URL or HTTP server
+        val serverUrl = when {
+            ip.startsWith("rtsp://") -> ip
+            ip.startsWith("http://") || ip.startsWith("https://") -> ip
+            else -> "http://$ip:$port"
+        }
+        
+        manualStartButton.isEnabled = false
+        manualStartButton.text = "Connecting..."
+        
+        lifecycleScope.launch {
+             // For RTSP, skip HTTP test
+            if (serverUrl.startsWith("rtsp://")) {
+                saveServerUrl(serverUrl, "", "")
+                navigateToMonitor(serverUrl, "", "")
+                return@launch
+            }
+            
+            try {
+                if (testConnection(serverUrl)) {
+                    saveServerUrl(serverUrl, "", "")
+                    navigateToMonitor(serverUrl, "", "")
+                } else {
+                    showConnectionError(serverUrl)
+                    manualStartButton.isEnabled = true
+                    manualStartButton.text = "Start Monitoring"
+                }
+            } catch (e: Exception) {
+                showConnectionError(serverUrl)
+                manualStartButton.isEnabled = true
+                manualStartButton.text = "Start Monitoring"
+            }
         }
     }
     
-    private fun navigateToMonitor(serverUrl: String) {
-        val intent = Intent(this@ServerSetupActivity, MonitorActivity::class.java)
+    private fun navigateToMonitor(serverUrl: String, user: String, pass: String) {
+        val intent = Intent(this, MonitorActivity::class.java)
         intent.putExtra("server_url", serverUrl)
-        
-        // Pass credentials if available from selected camera
-        selectedCamera?.let { camera ->
-            // Use contains check as URL might differ slightly (e.g. port) or match exactly
-            if (serverUrl == camera.streamUri || serverUrl.contains(camera.hostname)) {
-                if (!camera.username.isNullOrBlank()) {
-                    intent.putExtra("username", camera.username)
-                }
-                if (!camera.password.isNullOrBlank()) {
-                    intent.putExtra("password", camera.password)
+        if (user.isNotEmpty()) intent.putExtra("username", user)
+        if (pass.isNotEmpty()) intent.putExtra("password", pass)
+        startActivity(intent)
+        finish()
+    }
+
+    private fun loadSavedServerUrl() {
+        val prefs = getSharedPreferences("BabySleepMonitor", MODE_PRIVATE)
+        val savedUrl = prefs.getString("server_url", "") ?: ""
+
+        if (savedUrl.isNotEmpty()) {
+            if (savedUrl.startsWith("rtsp://")) {
+                // Pre-fill manual
+                manualIpInput.setText(savedUrl)
+                manualPortInput.setText("")
+            } else {
+                val urlWithoutProtocol = savedUrl.removePrefix("http://").removePrefix("https://")
+                val parts = urlWithoutProtocol.split(":")
+                if (parts.isNotEmpty()) {
+                    manualIpInput.setText(parts[0])
+                    if (parts.size > 1) manualPortInput.setText(parts[1])
                 }
             }
         }
-        
-        startActivity(intent)
-        finish()
     }
 
     private suspend fun testConnection(serverUrl: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                val status = ApiClient.getStatus(serverUrl)
+                ApiClient.getStatus(serverUrl)
                 true
             } catch (e: Exception) {
                 false
@@ -186,28 +327,19 @@ class ServerSetupActivity : AppCompatActivity() {
     }
 
     private fun showConnectionError(serverUrl: String) {
-        startMonitoringButton.isEnabled = true
-        startMonitoringButton.text = "Start Monitoring"
-        
-        // Navigate to error screen
         val intent = Intent(this, ConnectionErrorActivity::class.java)
         intent.putExtra("server_url", serverUrl)
         intent.putExtra("error_code", "ERR_CONNECTION_TIMED_OUT")
         startActivity(intent)
     }
 
-    private fun saveServerUrl(url: String) {
+    private fun saveServerUrl(url: String, user: String, pass: String) {
         val prefs = getSharedPreferences("BabySleepMonitor", MODE_PRIVATE)
         val editor = prefs.edit()
         editor.putString("server_url", url)
         editor.putBoolean("has_connected", true)
-        
-        // Save credentials if available from selected camera
-        selectedCamera?.let {
-            if (!it.username.isNullOrBlank()) editor.putString("rtsp_username", it.username)
-            if (!it.password.isNullOrBlank()) editor.putString("rtsp_password", it.password)
-        }
-        
+        if (user.isNotEmpty()) editor.putString("rtsp_username", user)
+        if (pass.isNotEmpty()) editor.putString("rtsp_password", pass)
         editor.apply()
     }
 }

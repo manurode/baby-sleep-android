@@ -9,10 +9,10 @@ data class OnvifCamera(
     val model: String? = null,
     val firmwareVersion: String? = null,
     val serialNumber: String? = null,
-    val streamUri: String? = null,
+    var streamUri: String? = null,
     val xAddr: String = "", // ONVIF service address
-    val username: String? = null,
-    val password: String? = null
+    var username: String? = null,
+    var password: String? = null
 ) {
     /**
      * Display name for UI - prioritizes model, falls back to hostname

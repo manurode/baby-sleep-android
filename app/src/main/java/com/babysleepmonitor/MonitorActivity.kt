@@ -146,8 +146,6 @@ class MonitorActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_monitor)
 
-        setContentView(R.layout.activity_monitor)
-        
         // Initialize SleepManager with DAO
         val app = application as BabySleepMonitorApp
         sleepManager = SleepManager(app.database.sleepDao(), lifecycleScope)
@@ -163,6 +161,20 @@ class MonitorActivity : AppCompatActivity() {
         setupListeners()
         requestNotificationPermission()
         autoStartMonitoringService()
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent) // Important! Update the intent so getIntent() returns the new one
+        
+        val newUrl = intent?.getStringExtra("server_url")
+        if (!newUrl.isNullOrEmpty()) {
+            serverUrl = newUrl
+            // Restart streaming with new params
+            if (isRtspMode) {
+                 startStreaming()
+            }
+        }
     }
 
     override fun onResume() {
@@ -704,6 +716,10 @@ class MonitorActivity : AppCompatActivity() {
                  username = username ?: prefs.getString("rtsp_username", null)
                  password = password ?: prefs.getString("rtsp_password", null)
             }
+
+            val userLog = if (username.isNullOrBlank()) "EMPTY" else username
+            val passLog = if (password.isNullOrBlank()) "EMPTY" else "******"
+            Log.d(TAG, "RtspPlayerManager.play -> URL: $serverUrl, User: $userLog, Pass: $passLog")
             
             play(serverUrl, username, password)
         }
