@@ -30,6 +30,10 @@ import com.babysleepmonitor.network.ApiClient
 import com.babysleepmonitor.network.MjpegInputStream
 import com.babysleepmonitor.network.RtspPlayerManager
 import com.babysleepmonitor.ui.RoiSelectionView
+import com.babysleepmonitor.ui.OverlayView
+import com.babysleepmonitor.logic.MotionDetector
+import com.babysleepmonitor.logic.SleepManager
+import com.babysleepmonitor.logic.SleepState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -58,6 +62,7 @@ class MonitorActivity : AppCompatActivity() {
     private lateinit var videoView: ImageView
     private lateinit var rtspPlayerView: VLCVideoLayout
     private lateinit var roiSelectionView: RoiSelectionView
+    private lateinit var overlayView: OverlayView
     private lateinit var connectionIndicator: View
     private lateinit var connectionStatusText: TextView
     private lateinit var motionStatusTitle: TextView
@@ -131,10 +136,21 @@ class MonitorActivity : AppCompatActivity() {
     private var videoStreamJob: Job? = null
     private var statusPollJob: Job? = null
     private var sleepStatsPollJob: Job? = null
+    private var processingJob: Job? = null
+    
+    // Local Logic
+    private val motionDetector = MotionDetector()
+    private lateinit var sleepManager: SleepManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_monitor)
+
+        setContentView(R.layout.activity_monitor)
+        
+        // Initialize SleepManager with DAO
+        val app = application as BabySleepMonitorApp
+        sleepManager = SleepManager(app.database.sleepDao(), lifecycleScope)
 
         serverUrl = intent.getStringExtra("server_url") ?: getSavedServerUrl()
         
@@ -179,6 +195,7 @@ class MonitorActivity : AppCompatActivity() {
         super.onDestroy()
         stopStreaming()
         releaseRtspPlayer()
+        sleepManager.stopSession()
     }
 
 
@@ -187,6 +204,7 @@ class MonitorActivity : AppCompatActivity() {
         videoView = findViewById(R.id.videoView)
         rtspPlayerView = findViewById(R.id.rtspPlayerView)
         roiSelectionView = findViewById(R.id.roiSelectionView)
+        overlayView = findViewById(R.id.overlayView)
         
         // Status
         connectionIndicator = findViewById(R.id.connectionIndicator)
@@ -468,7 +486,7 @@ class MonitorActivity : AppCompatActivity() {
     private fun loadSleepStats() {
         lifecycleScope.launch {
             try {
-                val stats = ApiClient.getSleepStats(serverUrl)
+                val stats = sleepManager.getStats()
                 withContext(Dispatchers.Main) {
                     updateSleepStatsUI(stats)
                 }
@@ -478,23 +496,34 @@ class MonitorActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateSleepStatsUI(stats: SleepStatsResponse) {
-        // Update card preview
-        sleepStateEmoji.text = stats.getStateEmoji()
-        sleepStateLabel.text = stats.getStateDisplayName()
+    private fun updateSleepStatsUI(stats: com.babysleepmonitor.logic.SleepStats) {
+        val emoji = when(stats.currentState) {
+             SleepState.AWAKE -> "👀"
+             SleepState.LIGHT_SLEEP -> "😴"
+             SleepState.DEEP_SLEEP -> "🛌"
+             SleepState.NO_BREATHING -> "⚠️"
+             else -> "❓"
+        }
+        sleepStateEmoji.text = emoji
+        sleepStateLabel.text = stats.currentState.value.replace("_", " ").replaceFirstChar { it.uppercase() }
         
+        val totalMin = stats.totalSleepSeconds / 60
+        val h = totalMin / 60
+        val m = totalMin % 60
+        val timeStr = "${h}h ${m}m"
+
         val previewText = when {
-            stats.total_sleep_minutes > 0 -> "Sleep: ${stats.getFormattedSleepTime()} • ${stats.wake_ups} wake-ups"
+            stats.totalSleepSeconds > 0 -> "Sleep: $timeStr • ${stats.wakeUps} wake-ups"
             else -> "Tap to view sleep quality metrics"
         }
         sleepStatsPreview.text = previewText
         
         // Update bottom sheet
-        sleepSheetEmoji.text = stats.getStateEmoji()
-        sleepSheetState.text = stats.getStateDisplayName()
+        sleepSheetEmoji.text = emoji
+        sleepSheetState.text = stats.currentState.value.replace("_", " ").replaceFirstChar { it.uppercase() }
         
         // Breathing indicator
-        val breathingDrawable = if (stats.breathing_detected) {
+        val breathingDrawable = if (stats.breathingDetected) {
             R.drawable.breathing_indicator_on
         } else {
             R.drawable.breathing_indicator_off
@@ -502,14 +531,18 @@ class MonitorActivity : AppCompatActivity() {
         breathingIndicatorSheet.setBackgroundResource(breathingDrawable)
         
         // Stats values
-        totalSleepTimeSheet.text = stats.getFormattedSleepTime()
-        wakeUpsSheet.text = stats.wake_ups.toString()
-        sleepQualitySheet.text = "${stats.sleep_quality_score}%"
-        sessionDurationSheet.text = stats.getFormattedSessionTime()
+        totalSleepTimeSheet.text = timeStr
+        wakeUpsSheet.text = stats.wakeUps.toString()
+        sleepQualitySheet.text = "${stats.sleepQualityScore}%"
+        
+        // Session Duration (Calculated roughly or stored?)
+        // SleepStats doesn't have session duration. Use totalSleepSeconds for now or calc relative to start?
+        // Let's use totalSleepSeconds for now as proxy or just "--"
+        sessionDurationSheet.text = timeStr 
         
         // Debug info - show breathing rate and phase
-        motionScoreSheet.text = String.format("%.1f BPM", stats.breathing_rate_bpm)
-        lastBreathSheet.text = stats.breathing_phase
+        motionScoreSheet.text = String.format("%.1f BPM", stats.breathingRateBpm)
+        lastBreathSheet.text = stats.sleepPhase
     }
 
     // ==================== ROI ====================
@@ -679,8 +712,89 @@ class MonitorActivity : AppCompatActivity() {
             updateConnectionStatus("Connecting", ConnectionState.CONNECTING)
         }
         
-        // Note: For RTSP mode, we don't poll status from the Python backend
-        // since we're connecting directly to the ONVIF camera
+        
+        // Start local video processing loop
+        startLocalProcessing()
+    }
+    
+    private fun startLocalProcessing() {
+        processingJob?.cancel()
+        processingJob = lifecycleScope.launch(Dispatchers.Default) {
+            while (isActive) {
+                val loopStart = System.currentTimeMillis()
+                
+                try {
+                    // 1. Capture Frame
+                    val bitmap = rtspPlayerManager?.getCurrentFrame()
+                    
+                    if (bitmap != null) {
+                        try {
+                            // 2. Process Motion (OpenCV)
+                            val result = motionDetector.processFrame(bitmap)
+                            
+                            // 3. Update Sleep Logic
+                            val sleepState = sleepManager.update(result.motionScore)
+                            
+                            // 4. Update UI
+                            withContext(Dispatchers.Main) {
+                                // Draw boxes
+                                overlayView.updateBoxes(result.boxes, result.width, result.height)
+                                
+                                // Update Stats UI (every few loops or always)
+                                val stats = sleepManager.getStats()
+                                updateLocalStatsUI(stats, result.motionScore)
+                            }
+                            
+                        } finally {
+                            // Crucial: Recycle bitmap to prevent OOM
+                            // Actually, depending on how getCurrentFrame works. 
+                            // TextureView.getBitmap() creates a NEW bitmap. We MUST recycle it.
+                            bitmap.recycle()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in local processing loop", e)
+                }
+                
+                // Maintain ~5 FPS (200ms)
+                val elapsed = System.currentTimeMillis() - loopStart
+                val delayTime = (200 - elapsed).coerceAtLeast(10)
+                delay(delayTime)
+            }
+        }
+    }
+
+    private fun updateLocalStatsUI(stats: com.babysleepmonitor.logic.SleepStats, currentScore: Double) {
+        // Update Motion Title
+        if (currentScore > 500) { // Threshold
+             motionStatusTitle.text = "Motion Detected"
+             motionStatusTitle.setTextColor(ContextCompat.getColor(this, R.color.primary)) // Use primary color instead of text_primary for emphasis
+        } else {
+             // Logic for 'No Motion' vs 'Movement'
+             motionStatusTitle.text = if (currentScore > 100) "Slight Movement" else "Still"
+             motionStatusTitle.setTextColor(ContextCompat.getColor(this, R.color.text_tertiary))
+        }
+        
+        // Update emoji
+        val emoji = when(stats.currentState) {
+             SleepState.AWAKE -> "👀"
+             SleepState.LIGHT_SLEEP -> "😴"
+             SleepState.DEEP_SLEEP -> "🛌"
+             SleepState.NO_BREATHING -> "⚠️"
+             else -> "❓"
+        }
+        
+        sleepStateEmoji.text = emoji
+        sleepStateLabel.text = stats.currentState.value
+        motionScoreSheet.text = "Score: ${currentScore.toInt()}"
+        
+        // Alert Logic
+        if (stats.currentState == SleepState.NO_BREATHING) {
+             // Show alarm overlay
+             alarmOverlay.visibility = View.VISIBLE
+        } else {
+             alarmOverlay.visibility = View.GONE
+        }
     }
     
     private fun startMjpegStreaming() {
@@ -705,6 +819,10 @@ class MonitorActivity : AppCompatActivity() {
         
         // Stop RTSP player if active
         rtspPlayerManager?.stop()
+        
+        // Stop processing
+        processingJob?.cancel()
+        processingJob = null
     }
     
     private fun releaseRtspPlayer() {

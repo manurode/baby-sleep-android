@@ -7,6 +7,9 @@ import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
+import android.graphics.Bitmap
+import android.view.TextureView
+import android.view.ViewGroup
 import java.util.ArrayList
 
 /**
@@ -73,7 +76,8 @@ class RtspPlayerManager(private val context: Context) {
             libVlc = LibVLC(context, options)
             mediaPlayer = MediaPlayer(libVlc)
 
-            mediaPlayer?.attachViews(videoLayout!!, null, false, false)
+            // Enable TextureView (true as last arg) to allow frame capture via getBitmap
+            mediaPlayer?.attachViews(videoLayout!!, null, false, true)
 
             mediaPlayer?.setEventListener { event ->
                 when (event.type) {
@@ -200,5 +204,30 @@ class RtspPlayerManager(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "Error releasing player", e)
         }
+    }
+
+    /**
+     * Captures the current video frame as a Bitmap.
+     * Returns null if player is not ready or texture view is unavailable.
+     */
+    fun getCurrentFrame(): Bitmap? {
+        if (videoLayout == null) return null
+        
+        // Find the inner TextureView (LibVLC adds it dynamically)
+        return findTextureView(videoLayout!!)?.getBitmap()
+    }
+
+    private fun findTextureView(group: ViewGroup): TextureView? {
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i)
+            if (child is TextureView) {
+                return child
+            }
+            if (child is ViewGroup) {
+                val found = findTextureView(child)
+                if (found != null) return found
+            }
+        }
+        return null
     }
 }

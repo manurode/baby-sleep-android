@@ -143,6 +143,12 @@
                     android:layout_height="match_parent"
                     android:visibility="gone" />
 
+                <!-- Motion Overlays -->
+                <com.babysleepmonitor.ui.OverlayView
+                    android:id="@+id/overlayView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
                 <!-- ROI Selection Overlay -->
                 <com.babysleepmonitor.ui.RoiSelectionView
                     android:id="@+id/roiSelectionView"

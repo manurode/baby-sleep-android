@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -36,6 +37,12 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    packaging {
+        jniLibs {
+            pickFirsts += "lib/**/libc++_shared.so"
+        }
+    }
 }
 
 dependencies {
@@ -58,4 +65,14 @@ dependencies {
     
     // LibVLC for RTSP streaming
     implementation("org.videolan.android:libvlc-all:3.6.0-eap5")
+
+    // OpenCV for Image Processing
+    implementation("com.quickbirdstudios:opencv:4.5.3.0")
+
+    // Room Database
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 }
+
+
