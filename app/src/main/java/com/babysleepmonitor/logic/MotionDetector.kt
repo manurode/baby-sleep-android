@@ -11,6 +11,8 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.objects.ObjectDetection
 import com.google.mlkit.vision.objects.ObjectDetector
 import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 /**
  * Port of Python VideoCamera motion detection logic.
@@ -27,6 +29,9 @@ class MotionDetector {
             .enableClassification()
             .build()
     )
+    
+    // Text Recognizer for avoiding timestamp/OSD false positives
+    private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     
     // Normalized ROI (0.0 - 1.0)
     var roi: Rect2d? = null
@@ -142,6 +147,32 @@ class MotionDetector {
             }
             objectMask.release()
 
+            // 7.5 Text/Number Masking (Timestamp Filter)
+            // Use ML Kit Text Recognition to find timestamps/numbers and black them out in 'thresh'
+            try {
+                val textTask = textRecognizer.process(inputImage)
+                val textResult = Tasks.await(textTask)
+                
+                for (block in textResult.textBlocks) {
+                     val rect = block.boundingBox
+                     if (rect != null) {
+                         // Inflate the text mask to cover artifacts/compression ghosting around numbers.
+                         // Timestamps often have "halos" of changed pixels that ML Kit doesn't include in the tight character box.
+                         val margin = 30 // px, generous margin to catch "box next to number"
+                         
+                         val x = (rect.left - margin).coerceAtLeast(0)
+                         val y = (rect.top - margin).coerceAtLeast(0)
+                         val w = (rect.width() + (margin * 2)).coerceAtMost(width - x)
+                         val h = (rect.height() + (margin * 2)).coerceAtMost(height - y)
+                         
+                         // Black out the INFLATED text area in the threshold image
+                         Imgproc.rectangle(thresh, Rect(x, y, w, h), Scalar(0.0), -1)
+                     }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Text detection error: ${e.message}")
+            }
+
         } catch (e: Exception) {
             Log.e(TAG, "Object detection error: ${e.message}")
             // Fallback: If detection fails, suppress motion to avoid false positives from timestamp
@@ -188,10 +219,10 @@ class MotionDetector {
         val boxes = ArrayList<android.graphics.Rect>()
         var totalMotionArea = 0.0
         
-        // Dynamic threshold: 0.1% of total area
-        // For 1920x1080 (~2MP), this is ~2000 pixels. 
-        // Timestamps are usually small changes.
-        val minContourArea = (width * height) * 0.001 
+        // Dynamic threshold: 0.005% of total area (approx 100px on 1080p)
+        // Lowered from 0.1% to allow subtle movement detection (breathing).
+        // False positives (timestamps) are handled by the Object Detection Mask above.
+        val minContourArea = (width * height) * 0.00005 
         
         val filteredThresh = Mat.zeros(thresh.size(), thresh.type())
 
@@ -199,11 +230,24 @@ class MotionDetector {
             val area = Imgproc.contourArea(contour)
             if (area > minContourArea) {
                 val r = Imgproc.boundingRect(contour)
-                boxes.add(android.graphics.Rect(r.x, r.y, r.x + r.width, r.y + r.height))
+
+                // Basic OSD/Timestamp Filter:
+                // Timestamps are typically at the top or bottom edge.
+                // If a small motion blob is detected near the vertical edges, ignore it.
+                // 10% margin at top/bottom.
+                val isAtVerticalEdge = r.y < height * 0.1 || (r.y + r.height) > height * 0.9
                 
-                // Redraw this valid contour onto a new mask to calculate accurate score
-                Imgproc.drawContours(filteredThresh, listOf(contour), -1, Scalar(255.0), -1)
-                totalMotionArea += area
+                // Only filter if the blob is small (e.g., < 1% of screen). 
+                // Larger movements at the edge (parent entering) should still trigger.
+                val isSmallArtifact = area < (width * height) * 0.01
+
+                if (!isAtVerticalEdge || !isSmallArtifact) {
+                    boxes.add(android.graphics.Rect(r.x, r.y, r.x + r.width, r.y + r.height))
+                    
+                    // Redraw this valid contour onto a new mask to calculate accurate score
+                    Imgproc.drawContours(filteredThresh, listOf(contour), -1, Scalar(255.0), -1)
+                    totalMotionArea += area
+                }
             }
             contour.release()
         }

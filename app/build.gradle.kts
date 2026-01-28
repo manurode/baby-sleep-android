@@ -71,6 +71,7 @@ dependencies {
 
     // ML Kit Object Detection
     implementation("com.google.mlkit:object-detection:17.0.1")
+    implementation("com.google.mlkit:text-recognition:16.0.0")
 
     // Room Database
     implementation(libs.androidx.room.runtime)
