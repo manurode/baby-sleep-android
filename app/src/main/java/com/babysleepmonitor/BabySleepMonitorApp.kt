@@ -8,6 +8,8 @@ class BabySleepMonitorApp : android.app.Application() {
     lateinit var database: com.babysleepmonitor.data.db.AppDatabase
         private set
 
+    val applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob())
+
     override fun onCreate() {
         super.onCreate()
          if (OpenCVLoader.initDebug()) {

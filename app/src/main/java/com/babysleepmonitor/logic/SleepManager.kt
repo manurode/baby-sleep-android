@@ -39,7 +39,8 @@ data class SleepStats(
     val totalSleepSeconds: Long,
     val wakeUps: Int,
     val eventsCount: Int,
-    val sleepPhase: String
+    val sleepPhase: String,
+    val sessionDurationSeconds: Long
 )
 
 class BreathingAnalyzer {
@@ -127,6 +128,8 @@ class BreathingAnalyzer {
 class SleepManager(
     private val sleepDao: SleepDao,
     private val scope: CoroutineScope,
+    private val externalScope: CoroutineScope, // For saving data after UI destruction
+    private val context: android.content.Context? = null,
     private val logger: ISleepLogger? = null,
     private val timeProvider: () -> Long = { System.currentTimeMillis() }
 ) {
@@ -152,6 +155,9 @@ class SleepManager(
     var currentState = SleepState.UNKNOWN
     private var sessionStartTime: Double? = null
     
+    val isSessionRunning: Boolean
+        get() = sessionStartTime != null
+    
     // Metrics
     private var totalSleepSeconds = 0.0
     private var deepSleepSeconds = 0.0
@@ -164,38 +170,79 @@ class SleepManager(
     private var pendingState: SleepState? = null
     private var pendingStateTime: Double? = null
     
+    // Logic - Wake Up Tracking
+    private var wasSleeping = false // Tracks if we were in a sleep state before current event
+
     init {
-        startSession()
+        // Removed startSession() from init. Must be called explicitly.
     }
     
     fun startSession() {
+        log("startSession() called. Initializing new session.")
         sessionStartTime = timeProvider() / 1000.0
         breathingAnalyzer.reset()
         motionBuffer.clear()
         currentState = SleepState.UNKNOWN
         totalSleepSeconds = 0.0
         wakeUpCount = 0
+        lastUpdateTime = 0.0
+        stateStartTime = sessionStartTime!!
+        wasSleeping = false
+        pendingState = null
+        pendingStateTime = null
     }
 
     fun stopSession() {
-        if (sessionStartTime != null) {
+        val start = sessionStartTime
+        if (start != null) {
              val endTime = timeProvider() / 1000.0
-             val duration = (endTime - sessionStartTime!!).toLong()
+             val duration = (endTime - start).toLong()
              log("Session stopped. Duration: $duration s")
+             
+             // Capture values locally to ensure thread safety inside coroutine
+             val finalTotalSleep = totalSleepSeconds
+             val finalWakeUps = wakeUpCount
+             val finalQuality = 85 // Placeholder
 
-             scope.launch(Dispatchers.IO) {
+             // Reset state immediately to prevent double-saving or inconsistent state
+             sessionStartTime = null
+             currentState = SleepState.UNKNOWN
+
+     // Use externalScope to ensure DB operation survives SleepManager/ViewModel destruction
+             externalScope.launch(Dispatchers.IO) {
                  val session = SleepSessionEntity(
-                     startTime = (sessionStartTime!! * 1000).toLong(),
+                     startTime = (start * 1000).toLong(),
                      endTime = (endTime * 1000).toLong(),
-                     totalSleepSeconds = totalSleepSeconds.toLong(),
-                     wakeUpCount = wakeUpCount,
-                     qualityScore = 85 // Placeholder
+                     totalSleepSeconds = finalTotalSleep.toLong(),
+                     wakeUpCount = finalWakeUps,
+                     qualityScore = finalQuality
                  )
                  try {
-                     sleepDao.insertSession(session)
-                     log("Session saved to DB")
+                     val id = sleepDao.insertSession(session)
+                     log("Session saved to DB successfully. ID: $id, $session")
+                     
+                     // Visual confirmation on Main Thread
+                     launch(Dispatchers.Main) {
+                         context?.let {
+                             val totalDuration = (session.endTime - session.startTime) / 1000
+                             val msg = "Saved #${id}. Duration: ${totalDuration}s (Sleep: ${session.totalSleepSeconds}s)"
+                             android.widget.Toast.makeText(it, msg, android.widget.Toast.LENGTH_LONG).show()
+                         }
+                     }
                  } catch (e: Exception) {
-                     logError("Failed to save session", e)
+                     logError("Failed to save session to DB", e)
+                     launch(Dispatchers.Main) {
+                         context?.let {
+                             android.widget.Toast.makeText(it, "Save Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                         }
+                     }
+                 }
+             }
+        } else {
+             log("stopSession called but sessionStartTime is NULL. Session was not running.")
+             externalScope.launch(Dispatchers.Main) {
+                 context?.let {
+                      android.widget.Toast.makeText(it, "STOP FAILED: Session was null/not started!", android.widget.Toast.LENGTH_LONG).show()
                  }
              }
         }
@@ -371,9 +418,20 @@ class SleepManager(
         stateStartTime = currentTime
         pendingState = null
         
-        if (oldState != SleepState.AWAKE && newState == SleepState.AWAKE && 
-            (oldState == SleepState.DEEP_SLEEP || oldState == SleepState.LIGHT_SLEEP)) {
-            wakeUpCount++
+        // Update sleeping status
+        val isSleeping = newState == SleepState.DEEP_SLEEP || newState == SleepState.LIGHT_SLEEP || newState == SleepState.REM_SLEEP
+        
+        // Check for Wake Up: Transition from Sleep (directly or via Spasm) to Awake
+        if (newState == SleepState.AWAKE) {
+             if (wasSleeping) {
+                 wakeUpCount++
+                 log("Wake up detected! Count: $wakeUpCount")
+                 wasSleeping = false 
+             }
+        } else if (isSleeping) {
+            wasSleeping = true
+        } else if (newState == SleepState.NO_BREATHING) {
+            wasSleeping = false // Reset? Or keep? Usually alarm.
         }
         
         log("Transition: $oldState -> $newState")
@@ -399,6 +457,12 @@ class SleepManager(
     }
     
     fun getStats(): SleepStats {
+        val duration = if (sessionStartTime != null) {
+            (timeProvider() / 1000.0 - sessionStartTime!!).toLong()
+        } else {
+            0L
+        }
+        
         return SleepStats(
             currentState = currentState,
             breathingDetected = currentState == SleepState.DEEP_SLEEP || currentState == SleepState.LIGHT_SLEEP,
@@ -407,7 +471,8 @@ class SleepManager(
             totalSleepSeconds = totalSleepSeconds.toLong(),
             wakeUps = wakeUpCount,
             eventsCount = 0,
-            sleepPhase = breathingAnalyzer.getSleepPhase()
+            sleepPhase = breathingAnalyzer.getSleepPhase(),
+            sessionDurationSeconds = duration
         )
     }
 }

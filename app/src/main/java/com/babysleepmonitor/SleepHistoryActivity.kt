@@ -11,10 +11,14 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.babysleepmonitor.data.SleepHistoryItem
-import com.babysleepmonitor.network.ApiClient
+import com.babysleepmonitor.data.db.SleepSessionEntity
 import com.babysleepmonitor.ui.SleepHistoryAdapter
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Sleep History screen displaying list of past sleep sessions.
@@ -95,25 +99,28 @@ class SleepHistoryActivity : AppCompatActivity() {
     }
     
     private fun loadHistory() {
-        if (serverUrl.isEmpty()) {
-            showEmptyState()
-            return
-        }
+        // Local history does not strictly require serverUrl, but we use it for connection status?
+        // if (serverUrl.isEmpty()) { ... } // REMOVED to allow local history viewing without active server connection
         
         showLoading()
         
         lifecycleScope.launch {
             try {
-                val response = ApiClient.getSleepHistory(serverUrl)
+                // Fetch from Local DB
+                val app = application as BabySleepMonitorApp
+                val sessions = app.database.sleepDao().getAllSessions()
                 
-                if (response.history.isEmpty()) {
+                android.util.Log.d("SleepHistory", "Fetched ${sessions.size} sessions from DB")
+                
+                if (sessions.isEmpty()) {
                     showEmptyState()
                 } else {
-                    showHistory(response.history)
-                    calculateSummaries(response.history)
+                    val items = sessions.map { entity -> mapEntityToHistoryItem(entity) }
+                    showHistory(items)
+                    calculateSummaries(items)
                 }
                 
-                updateConnectionStatus(true)
+                updateConnectionStatus(true) // Local DB is always "connected" effectively
                 
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -121,6 +128,36 @@ class SleepHistoryActivity : AppCompatActivity() {
                 showEmptyState()
             }
         }
+    }
+    
+    private fun mapEntityToHistoryItem(entity: SleepSessionEntity): SleepHistoryItem {
+         val startInstant = Instant.ofEpochMilli(entity.startTime)
+         val zoneId = ZoneId.systemDefault()
+         val zdt = startInstant.atZone(zoneId)
+         
+         val isoDate = DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(zdt)
+         
+         val durationSeconds = ((entity.endTime - entity.startTime) / 1000).toInt()
+         val h = durationSeconds / 3600
+         val m = (durationSeconds % 3600) / 60
+         val formattedDuration = if (h > 0) "${h}h ${m}m" else "${m}m"
+         
+         val rating = when {
+             entity.qualityScore >= 85 -> "Excellent"
+             entity.qualityScore >= 70 -> "Good"
+             entity.qualityScore >= 50 -> "Fair"
+             else -> "Poor"
+         }
+         
+         return SleepHistoryItem(
+             id = entity.id.toString(),
+             timestamp = entity.startTime / 1000.0,
+             date_iso = isoDate,
+             duration_seconds = durationSeconds,
+             duration_formatted = formattedDuration,
+             quality_score = entity.qualityScore,
+             quality_rating = rating
+         )
     }
     
     private fun showLoading() {
@@ -209,7 +246,7 @@ class SleepHistoryActivity : AppCompatActivity() {
     }
     
     private fun getSavedServerUrl(): String {
-        val prefs = getSharedPreferences("baby_sleep_prefs", MODE_PRIVATE)
+        val prefs = getSharedPreferences("BabySleepMonitor", MODE_PRIVATE)
         return prefs.getString("server_url", "") ?: ""
     }
     

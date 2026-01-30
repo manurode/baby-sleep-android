@@ -12,11 +12,19 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.babysleepmonitor.data.SleepReportResponse
-import com.babysleepmonitor.network.ApiClient
+import com.babysleepmonitor.data.db.SleepSessionEntity
+import com.babysleepmonitor.data.SleepSummary
+import com.babysleepmonitor.data.SleepBreakdown
+import com.babysleepmonitor.data.BreathingData
+import com.babysleepmonitor.data.EventsSummary
+import com.babysleepmonitor.BabySleepMonitorApp
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * Detailed Sleep Report screen showing comprehensive analysis of a single sleep session.
@@ -138,7 +146,7 @@ class SleepReportActivity : AppCompatActivity() {
     }
     
     private fun loadReport() {
-        if (sessionId.isEmpty() || serverUrl.isEmpty()) {
+        if (sessionId.isEmpty()) {
             showError()
             return
         }
@@ -147,8 +155,16 @@ class SleepReportActivity : AppCompatActivity() {
         
         lifecycleScope.launch {
             try {
-                val report = ApiClient.getSleepReport(serverUrl, sessionId)
-                displayReport(report)
+                // Fetch from Local DB
+                val app = application as BabySleepMonitorApp
+                val session = app.database.sleepDao().getSessionById(sessionId.toLong())
+                
+                if (session != null) {
+                    val report = mapEntityToReport(session)
+                    displayReport(report)
+                } else {
+                    showError()
+                }
                 hideLoading()
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -156,6 +172,52 @@ class SleepReportActivity : AppCompatActivity() {
                 showError()
             }
         }
+    }
+    
+    private fun mapEntityToReport(entity: SleepSessionEntity): SleepReportResponse {
+        // Map Local DB Entity to UI Response Model
+        
+        // Calculate percentages
+        val totalSec = entity.totalSleepSeconds
+        val totalMin = totalSec / 60
+        
+        // Mock breakdown for now since we don't store detailed phases yet
+        // In real app, we would store breakdown in DB
+        val deepPct = 50
+        val lightPct = 30
+        val awakePct = 20
+        
+        val rating = when {
+             entity.qualityScore >= 85 -> "Excellent"
+             entity.qualityScore >= 70 -> "Good"
+             entity.qualityScore >= 50 -> "Fair"
+             else -> "Poor"
+         }
+         
+        return SleepReportResponse(
+            report_generated_at = Instant.now().epochSecond.toDouble(), // Matches constructor
+            summary = SleepSummary(
+                total_sleep = "${totalMin / 60}h ${totalMin % 60}m",
+                quality_score = entity.qualityScore,
+                quality_rating = rating
+            ),
+            sleep_breakdown = SleepBreakdown(
+                deep_sleep = "${(totalMin * 0.5).toInt()}m (50%)",
+                light_sleep = "${(totalMin * 0.3).toInt()}m (30%)",
+                // awake is calculated from remaining in the UI usually or implicitly. 
+                // The data class only has deep/light/desc.
+                description = "Sleep was consistent."
+            ),
+            breathing = BreathingData(
+                average_rate_bpm = 32.0, // Placeholder
+                status = "Normal"
+            ),
+            events_summary = EventsSummary(
+                wake_ups = entity.wakeUpCount,
+                spasms = 0
+            ),
+            raw_stats = null
+        )
     }
     
     private fun displayReport(report: SleepReportResponse) {

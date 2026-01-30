@@ -34,6 +34,8 @@ import com.babysleepmonitor.ui.OverlayView
 import com.babysleepmonitor.logic.MotionDetector
 import com.babysleepmonitor.logic.SleepManager
 import com.babysleepmonitor.logic.SleepState
+import com.babysleepmonitor.ui.SleepViewModel
+import androidx.lifecycle.ViewModelProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -140,15 +142,15 @@ class MonitorActivity : AppCompatActivity() {
     
     // Local Logic
     private val motionDetector = MotionDetector()
-    private lateinit var sleepManager: SleepManager
+    private lateinit var sleepViewModel: SleepViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_monitor)
 
-        // Initialize SleepManager with DAO
-        val app = application as BabySleepMonitorApp
-        sleepManager = SleepManager(app.database.sleepDao(), lifecycleScope)
+        // Initialize SleepViewModel
+        val factory = ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+        sleepViewModel = ViewModelProvider(this, factory)[SleepViewModel::class.java]
 
         serverUrl = intent.getStringExtra("server_url") ?: getSavedServerUrl()
         
@@ -207,7 +209,15 @@ class MonitorActivity : AppCompatActivity() {
         super.onDestroy()
         stopStreaming()
         releaseRtspPlayer()
-        sleepManager.stopSession()
+        
+        // Failsafe: If activity is finishing (user exit), ensure session is stopped/saved
+        if (isFinishing) {
+             if (::sleepViewModel.isInitialized && sleepViewModel.sleepManager.isSessionRunning) {
+                 Log.d(TAG, "Activity finishing, saving session")
+                 Toast.makeText(this, "Saving session (Finishing)", Toast.LENGTH_SHORT).show()
+                 sleepViewModel.sleepManager.stopSession()
+             }
+        }
     }
 
 
@@ -252,6 +262,7 @@ class MonitorActivity : AppCompatActivity() {
         
         // Stop monitoring button (optional - may not exist in all layouts)
         stopMonitoringButton = findViewById(R.id.stopMonitoringButton)
+        Log.d(TAG, "initViews: stopMonitoringButton found: ${stopMonitoringButton != null}")
         
         // Sleep Stats views
         sleepStatsCard = findViewById(R.id.sleepStatsCard)
@@ -337,6 +348,7 @@ class MonitorActivity : AppCompatActivity() {
         
         // Stop monitoring button
         stopMonitoringButton?.setOnClickListener {
+            Log.d(TAG, "Stop Monitoring Button Clicked")
             stopMonitoringAndNavigate()
         }
         
@@ -498,7 +510,7 @@ class MonitorActivity : AppCompatActivity() {
     private fun loadSleepStats() {
         lifecycleScope.launch {
             try {
-                val stats = sleepManager.getStats()
+                val stats = sleepViewModel.sleepManager.getStats()
                 withContext(Dispatchers.Main) {
                     updateSleepStatsUI(stats)
                 }
@@ -547,10 +559,13 @@ class MonitorActivity : AppCompatActivity() {
         wakeUpsSheet.text = stats.wakeUps.toString()
         sleepQualitySheet.text = "${stats.sleepQualityScore}%"
         
-        // Session Duration (Calculated roughly or stored?)
-        // SleepStats doesn't have session duration. Use totalSleepSeconds for now or calc relative to start?
-        // Let's use totalSleepSeconds for now as proxy or just "--"
-        sessionDurationSheet.text = timeStr 
+        // Session Duration (Wall clock time)
+        val durationS = stats.sessionDurationSeconds
+        val dH = durationS / 3600
+        val dM = (durationS % 3600) / 60
+        val dS = durationS % 60
+        val durationStr = String.format("%02d:%02d:%02d", dH, dM, dS)
+        sessionDurationSheet.text = durationStr
         
         // Debug info - show breathing rate and phase
         motionScoreSheet.text = String.format("%.1f BPM", stats.breathingRateBpm)
@@ -686,6 +701,11 @@ class MonitorActivity : AppCompatActivity() {
                     lifecycleScope.launch {
                         if (isPlaying) {
                             updateConnectionStatus("Connected", ConnectionState.CONNECTED)
+                            // Start session if not running
+                            if (!sleepViewModel.sleepManager.isSessionRunning) {
+                                sleepViewModel.sleepManager.startSession()
+                                Log.d(TAG, "Sleep Session Started")
+                            }
                         }
                     }
                 }
@@ -726,6 +746,13 @@ class MonitorActivity : AppCompatActivity() {
         
         lifecycleScope.launch {
             updateConnectionStatus("Connecting", ConnectionState.CONNECTING)
+            
+            // Force start session immediately when we attempt to stream
+            if (!sleepViewModel.sleepManager.isSessionRunning) {
+                 sleepViewModel.sleepManager.startSession()
+                 Log.d(TAG, "Sleep Session Started (Force - Pre-Stream)")
+                 Toast.makeText(this@MonitorActivity, "Session Started (Force)", Toast.LENGTH_SHORT).show()
+            }
         }
         
         
@@ -745,11 +772,20 @@ class MonitorActivity : AppCompatActivity() {
                     
                     if (bitmap != null) {
                         try {
+                            // Failsafe: Ensure session is running if we are getting frames
+                            if (!sleepViewModel.sleepManager.isSessionRunning) {
+                                withContext(Dispatchers.Main) {
+                                    sleepViewModel.sleepManager.startSession()
+                                    Log.d(TAG, "Sleep Session Started (Failsafe via Frame)")
+                                    Toast.makeText(this@MonitorActivity, "Session Started (Auto)", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+
                             // 2. Process Motion (OpenCV)
                             val result = motionDetector.processFrame(bitmap)
                             
                             // 3. Update Sleep Logic
-                            val sleepState = sleepManager.update(result.motionScore)
+                            val sleepState = sleepViewModel.sleepManager.update(result.motionScore)
                             
                             // 4. Update UI
                             withContext(Dispatchers.Main) {
@@ -757,7 +793,7 @@ class MonitorActivity : AppCompatActivity() {
                                 overlayView.updateBoxes(result.boxes, result.width, result.height)
                                 
                                 // Update Stats UI (every few loops or always)
-                                val stats = sleepManager.getStats()
+                                val stats = sleepViewModel.sleepManager.getStats()
                                 updateLocalStatsUI(stats, result.motionScore)
                             }
                             
@@ -784,7 +820,10 @@ class MonitorActivity : AppCompatActivity() {
         // Update Motion Title
         if (currentScore > 500) { // Threshold
              motionStatusTitle.text = "Motion Detected"
-             motionStatusTitle.setTextColor(ContextCompat.getColor(this, R.color.primary)) // Use primary color instead of text_primary for emphasis
+             motionStatusTitle.setTextColor(ContextCompat.getColor(this, R.color.primary))
+        } else if (stats.currentState == SleepState.CALIBRATING || stats.currentState == SleepState.UNKNOWN) {
+             motionStatusTitle.text = "Calibrating..."
+             motionStatusTitle.setTextColor(ContextCompat.getColor(this, R.color.text_tertiary))
         } else {
              // Logic for 'No Motion' vs 'Movement'
              motionStatusTitle.text = if (currentScore > 100) "Slight Movement" else "Still"
@@ -824,6 +863,12 @@ class MonitorActivity : AppCompatActivity() {
         
         statusPollJob = lifecycleScope.launch {
             pollStatus()
+        }
+        
+        // Start session for MJPEG mode too
+        if (!sleepViewModel.sleepManager.isSessionRunning) {
+             sleepViewModel.sleepManager.startSession()
+             Log.d(TAG, "Sleep Session Started (MJPEG)")
         }
     }
 
@@ -1009,6 +1054,9 @@ class MonitorActivity : AppCompatActivity() {
      * Called from Stop Monitoring button and Connection Lost dialog.
      */
     private fun stopMonitoringAndNavigate() {
+        Log.d(TAG, "stopMonitoringAndNavigate called")
+        Toast.makeText(this, "Stopping...", Toast.LENGTH_SHORT).show()
+        
         // Stop the monitoring service
         if (MonitoringService.isRunning) {
             stopService(Intent(this, MonitoringService::class.java))
@@ -1017,6 +1065,10 @@ class MonitorActivity : AppCompatActivity() {
         // Stop any alarm sounds
         MonitoringService.stopAlarmSound(this)
         
+        // Stop session explicitly
+        Log.d(TAG, "Stopping sleep session")
+        sleepViewModel.sleepManager.stopSession()
+
         // Stop streaming
         stopStreaming()
         
@@ -1104,8 +1156,8 @@ class MonitorActivity : AppCompatActivity() {
                 exitRoiMode()
             }
             else -> {
-                // Go back to setup screen
-                navigateToSetup()
+                // Stop monitoring and go back
+                stopMonitoringAndNavigate()
             }
         }
     }

@@ -144,11 +144,12 @@
                                 android:id="@+id/tvTrend"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="↑ 12%"
+                                android:text="--"
                                 android:textColor="#22C55E"
                                 android:textSize="12sp"
                                 android:fontFamily="sans-serif-medium"
-                                android:layout_marginStart="8dp" />
+                                android:layout_marginStart="8dp"
+                                android:visibility="invisible"/>
 
                         </LinearLayout>
 
@@ -156,7 +157,7 @@
                             android:id="@+id/tvAvgSleep"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="8h 24m"
+                            android:text="--h --m"
                             android:textColor="#1F2937"
                             android:textSize="24sp"
                             android:fontFamily="sans-serif-medium"
@@ -226,7 +227,7 @@
                             android:id="@+id/tvAvgQuality"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="85%"
+                            android:text="--%"
                             android:textColor="#1F2937"
                             android:textSize="24sp"
                             android:fontFamily="sans-serif-medium"
