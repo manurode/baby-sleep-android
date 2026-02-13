@@ -187,6 +187,7 @@ class MonitorActivity : AppCompatActivity() {
         connectionLostDialogShown = false
         
         Log.d(TAG, "onResume: isConnectionLost=${MonitoringService.isConnectionLost}, isRunning=${MonitoringService.isRunning}")
+        Log.d(TAG, "onResume: BackgroundMonitoringService.isRunning=${BackgroundMonitoringService.isRunning}")
         
         // Check if connection was lost while app was in background
         if (MonitoringService.isConnectionLost) {
@@ -196,13 +197,37 @@ class MonitorActivity : AppCompatActivity() {
         }
         
         if (serverUrl.isNotEmpty()) {
+            // Stop background service FIRST — it uses its own SimpleMotionDetector
+            // (no ML Kit), but we still want a clean handoff to foreground.
+            if (BackgroundMonitoringService.isRunning) {
+                Log.d(TAG, "onResume: Stopping background service (switching to foreground processing)")
+                stopBackgroundMonitoringService()
+            }
+            
+            // Reset the foreground MotionDetector's previous frame reference.
+            // After being in background, the last frame is stale — using it would
+            // produce a massive diff on the first comparison, then possibly nothing.
+            motionDetector.reset()
+            
+            if (sleepViewModel.sleepManager.isSessionRunning) {
+                Log.d(TAG, "onResume: Session still active from background, reconnecting UI")
+            }
             startStreaming()
         }
     }
 
     override fun onPause() {
         super.onPause()
+        // Stop foreground streaming (VLC + processing loop)
+        Log.d(TAG, "onPause: Stopping UI streaming, starting background service")
         stopStreaming()
+        
+        // Start background service to take over motion detection.
+        // We MUST stop the foreground MotionDetector/ML Kit first (via stopStreaming)
+        // before starting the background one — two STREAM_MODE detectors conflict.
+        if (sleepViewModel.sleepManager.isSessionRunning && serverUrl.isNotEmpty()) {
+            startBackgroundMonitoringService()
+        }
     }
 
     override fun onDestroy() {
@@ -210,13 +235,19 @@ class MonitorActivity : AppCompatActivity() {
         stopStreaming()
         releaseRtspPlayer()
         
-        // Failsafe: If activity is finishing (user exit), ensure session is stopped/saved
         if (isFinishing) {
-             if (::sleepViewModel.isInitialized && sleepViewModel.sleepManager.isSessionRunning) {
-                 Log.d(TAG, "Activity finishing, saving session")
-                 Toast.makeText(this, "Saving session (Finishing)", Toast.LENGTH_SHORT).show()
-                 sleepViewModel.sleepManager.stopSession()
-             }
+            // User is explicitly leaving the activity (back button, stopMonitoringAndNavigate, etc.)
+            // Stop the background service and save the session
+            Log.d(TAG, "Activity finishing. Stopping BackgroundMonitoringService and saving session.")
+            stopBackgroundMonitoringService()
+            if (::sleepViewModel.isInitialized && sleepViewModel.sleepManager.isSessionRunning) {
+                Log.d(TAG, "Activity finishing, saving session")
+                Toast.makeText(this, "Saving session (Finishing)", Toast.LENGTH_SHORT).show()
+                sleepViewModel.sleepManager.stopSession()
+            }
+        } else {
+            // Configuration change or system reclaim — background service keeps going
+            Log.d(TAG, "Activity destroyed (not finishing). Background service continues.")
         }
     }
 
@@ -706,6 +737,9 @@ class MonitorActivity : AppCompatActivity() {
                                 sleepViewModel.sleepManager.startSession()
                                 Log.d(TAG, "Sleep Session Started")
                             }
+                            // NOTE: Background service is started in onPause(), NOT here.
+                            // Starting it here creates a second ML Kit ObjectDetector that
+                            // conflicts with the foreground detector (both return 0 results).
                         }
                     }
                 }
@@ -878,12 +912,17 @@ class MonitorActivity : AppCompatActivity() {
         videoStreamJob = null
         statusPollJob = null
         
-        // Stop RTSP player if active
-        rtspPlayerManager?.stop()
-        
-        // Stop processing
+        // Stop processing first
         processingJob?.cancel()
         processingJob = null
+        
+        // Fully release RTSP player so a FRESH one is created on resume.
+        // Just calling stop() leaves VLC in a half-dead internal state.
+        // When startRtspStreaming() then reuses the stopped instance,
+        // motion detection breaks (getCurrentFrame returns stale/null frames).
+        rtspPlayerManager?.stop()
+        rtspPlayerManager?.release()
+        rtspPlayerManager = null
     }
     
     private fun releaseRtspPlayer() {
@@ -1057,10 +1096,13 @@ class MonitorActivity : AppCompatActivity() {
         Log.d(TAG, "stopMonitoringAndNavigate called")
         Toast.makeText(this, "Stopping...", Toast.LENGTH_SHORT).show()
         
-        // Stop the monitoring service
+        // Stop the HTTP polling monitoring service (legacy)
         if (MonitoringService.isRunning) {
             stopService(Intent(this, MonitoringService::class.java))
         }
+        
+        // Stop the background snapshot monitoring service
+        stopBackgroundMonitoringService()
         
         // Stop any alarm sounds
         MonitoringService.stopAlarmSound(this)
@@ -1113,6 +1155,54 @@ class MonitorActivity : AppCompatActivity() {
             putExtra("server_url", serverUrl)
         }
         ContextCompat.startForegroundService(this, intent)
+    }
+
+    // ==================== BACKGROUND SNAPSHOT SERVICE ====================
+
+    /**
+     * Starts the BackgroundMonitoringService which polls the ONVIF camera for
+     * JPEG snapshots. This service continues running when the activity is paused
+     * or the screen is turned off.
+     */
+    private fun startBackgroundMonitoringService() {
+        if (BackgroundMonitoringService.isRunning) {
+            Log.d(TAG, "BackgroundMonitoringService already running, skipping start")
+            return
+        }
+        
+        if (!hasNotificationPermission()) {
+            Log.w(TAG, "No notification permission, cannot start foreground service")
+            requestNotificationPermission()
+            return
+        }
+        
+        // Get credentials
+        var username = intent.getStringExtra("username")
+        var password = intent.getStringExtra("password")
+        if (username == null || password == null) {
+            val prefs = getSharedPreferences("BabySleepMonitor", MODE_PRIVATE)
+            username = username ?: prefs.getString("rtsp_username", null) ?: ""
+            password = password ?: prefs.getString("rtsp_password", null) ?: ""
+        }
+        
+        val serviceIntent = Intent(this, BackgroundMonitoringService::class.java).apply {
+            putExtra("rtsp_url", serverUrl)
+            putExtra("username", username)
+            putExtra("password", password)
+        }
+        
+        ContextCompat.startForegroundService(this, serviceIntent)
+        Log.i(TAG, "Started BackgroundMonitoringService for background/screen-off motion tracking")
+    }
+
+    /**
+     * Stops the BackgroundMonitoringService.
+     */
+    private fun stopBackgroundMonitoringService() {
+        if (BackgroundMonitoringService.isRunning) {
+            stopService(Intent(this, BackgroundMonitoringService::class.java))
+            Log.i(TAG, "Stopped BackgroundMonitoringService")
+        }
     }
 
     private fun requestNotificationPermission() {

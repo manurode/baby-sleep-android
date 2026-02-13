@@ -84,9 +84,16 @@
             android:exported="false"
             android:theme="@style/Theme.BabySleepMonitor" />
 
-        <!-- Background Monitoring Service -->
+        <!-- HTTP Polling Monitoring Service (legacy, for HTTP-based servers) -->
         <service
             android:name=".MonitoringService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Background Snapshot Monitoring Service (ONVIF camera snapshot polling) -->
+        <service
+            android:name=".BackgroundMonitoringService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
