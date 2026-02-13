@@ -258,6 +258,7 @@ class SleepManager(
              currentState = SleepState.CALIBRATING
              // Only log once per second or if state changes to avoid spam? 
              // For now, logging every update might be too much, but requested.
+             log("StateLogic: Calibrating... ${(currentTime - sessionStartTime!!)}")
              return currentState
         }
 
@@ -335,7 +336,10 @@ class SleepManager(
         // High motion detected recently
         if (recentMax > HIGH_MOTION_THRESHOLD) {
             // If already AWAKE, stay AWAKE
-            if (currentState == SleepState.AWAKE) return SleepState.AWAKE
+            if (currentState == SleepState.AWAKE) {
+                log("StateLogic: RecentMax ($recentMax) > HIGH -> Maintaining AWAKE")
+                return SleepState.AWAKE
+            }
             
             // Note: If this persists for > 5s, handleTransition will promote to AWAKE.
             // Initially we treat it as SPASM (Transient high motion).
