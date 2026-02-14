@@ -69,8 +69,8 @@ class BackgroundMonitoringService : Service() {
         private val ONVIF_PORTS = listOf(8899, 80, 8080, 2020, 8000)
 
         // ImageReader config — higher resolution = better motion detection.
-        // 1280x720 is a good balance: much better than 640x480, and software decoding
-        // on modern SoCs handles 720p fine at 5 FPS.
+        // 1920x1080 is a good balance: much better than 640x480, and software decoding
+        // on modern SoCs handles 1080p fine at 5 FPS.
         private const val CAPTURE_WIDTH = 1920
         private const val CAPTURE_HEIGHT = 1080
         private const val IMAGE_READER_MAX_IMAGES = 4
