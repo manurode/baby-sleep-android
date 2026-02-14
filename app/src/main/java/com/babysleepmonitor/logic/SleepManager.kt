@@ -37,10 +37,14 @@ data class SleepStats(
     val breathingRateBpm: Double,
     val sleepQualityScore: Int,
     val totalSleepSeconds: Long,
+    val deepSleepSeconds: Long,
+    val lightSleepSeconds: Long,
     val wakeUps: Int,
+    val spasmCount: Int,
     val eventsCount: Int,
     val sleepPhase: String,
-    val sessionDurationSeconds: Long
+    val sessionDurationSeconds: Long,
+    val avgBreathingBpm: Double
 )
 
 class BreathingAnalyzer {
@@ -184,8 +188,16 @@ class SleepManager(
     private var deepSleepSeconds = 0.0
     private var lightSleepSeconds = 0.0
     private var wakeUpCount = 0
+    private var spasmCount = 0
     private var lastUpdateTime = 0.0
     private var stateStartTime = 0.0
+    
+    // Breathing rate accumulator for session average
+    private var breathingRateSum = 0.0
+    private var breathingRateSamples = 0
+    
+    // State timeline: records every state transition as (timestampMs, stateValue)
+    private val stateTimeline = mutableListOf<Pair<Long, String>>()
     
     // Transition Hysteresis
     private var pendingState: SleepState? = null
@@ -205,12 +217,62 @@ class SleepManager(
         motionBuffer.clear()
         currentState = SleepState.UNKNOWN
         totalSleepSeconds = 0.0
+        deepSleepSeconds = 0.0
+        lightSleepSeconds = 0.0
         wakeUpCount = 0
+        spasmCount = 0
+        breathingRateSum = 0.0
+        breathingRateSamples = 0
+        stateTimeline.clear()
         lastUpdateTime = 0.0
         stateStartTime = sessionStartTime!!
         wasSleeping = false
         pendingState = null
         pendingStateTime = null
+    }
+
+    /**
+     * Compute a real sleep quality score (0-100) based on session metrics.
+     *
+     * Factors:
+     * - Deep sleep ratio (ideal: 30-50% of total sleep) — weight 40%
+     * - Wake-up count (0 = perfect, each one penalizes) — weight 30%
+     * - Spasm count (fewer is better) — weight 15%
+     * - Total sleep vs session duration ratio — weight 15%
+     */
+    private fun computeQualityScore(
+        totalSleep: Double,
+        deepSleep: Double,
+        lightSleep: Double,
+        wakeUps: Int,
+        spasms: Int,
+        sessionDurationSec: Double
+    ): Int {
+        if (totalSleep <= 0 || sessionDurationSec <= 0) return 0
+
+        // 1. Deep sleep ratio score (40 points max)
+        val deepRatio = deepSleep / totalSleep
+        val deepScore = when {
+            deepRatio in 0.30..0.50 -> 40.0          // Ideal range
+            deepRatio in 0.20..0.30 -> 30.0          // Acceptable
+            deepRatio in 0.50..0.60 -> 35.0          // Slightly too much but ok
+            deepRatio in 0.10..0.20 -> 20.0          // Low
+            deepRatio > 0.60 -> 25.0                  // Too much deep sleep
+            else -> 10.0                               // Very low deep sleep
+        }
+
+        // 2. Wake-up penalty (30 points max)
+        val wakeUpScore = max(0.0, 30.0 - (wakeUps * 8.0))
+
+        // 3. Spasm penalty (15 points max)
+        val spasmScore = max(0.0, 15.0 - (spasms * 3.0))
+
+        // 4. Sleep efficiency: total sleep / session duration (15 points max)
+        val efficiency = totalSleep / sessionDurationSec
+        val efficiencyScore = min(15.0, efficiency * 15.0)
+
+        val total = (deepScore + wakeUpScore + spasmScore + efficiencyScore).toInt()
+        return total.coerceIn(0, 100)
     }
 
     fun stopSession() {
@@ -222,8 +284,18 @@ class SleepManager(
              
              // Capture values locally to ensure thread safety inside coroutine
              val finalTotalSleep = totalSleepSeconds
+             val finalDeepSleep = deepSleepSeconds
+             val finalLightSleep = lightSleepSeconds
              val finalWakeUps = wakeUpCount
-             val finalQuality = 85 // Placeholder
+             val finalSpasms = spasmCount
+             val finalAvgBpm = if (breathingRateSamples > 0) breathingRateSum / breathingRateSamples else 0.0
+             val finalTimeline = stateTimeline.joinToString(",") { "${it.first}:${it.second}" }
+             val finalQuality = computeQualityScore(
+                 finalTotalSleep, finalDeepSleep, finalLightSleep,
+                 finalWakeUps, finalSpasms, duration.toDouble()
+             )
+             
+             log("Quality score computed: $finalQuality (deepSleep=${finalDeepSleep.toLong()}s, lightSleep=${finalLightSleep.toLong()}s, wakeUps=$finalWakeUps, spasms=$finalSpasms, avgBpm=${String.format("%.1f", finalAvgBpm)})")
 
              // Reset state immediately to prevent double-saving or inconsistent state
              sessionStartTime = null
@@ -236,7 +308,12 @@ class SleepManager(
                      endTime = (endTime * 1000).toLong(),
                      totalSleepSeconds = finalTotalSleep.toLong(),
                      wakeUpCount = finalWakeUps,
-                     qualityScore = finalQuality
+                     qualityScore = finalQuality,
+                     deepSleepSeconds = finalDeepSleep.toLong(),
+                     lightSleepSeconds = finalLightSleep.toLong(),
+                     spasmCount = finalSpasms,
+                     avgBreathingBpm = finalAvgBpm,
+                     stateTimeline = finalTimeline
                  )
                  try {
                      val id = sleepDao.insertSession(session)
@@ -246,7 +323,7 @@ class SleepManager(
                      launch(Dispatchers.Main) {
                          context?.let {
                              val totalDuration = (session.endTime - session.startTime) / 1000
-                             val msg = "Saved #${id}. Duration: ${totalDuration}s (Sleep: ${session.totalSleepSeconds}s)"
+                             val msg = "Saved #${id}. Duration: ${totalDuration}s (Sleep: ${session.totalSleepSeconds}s, Q: ${session.qualityScore})"
                              android.widget.Toast.makeText(it, msg, android.widget.Toast.LENGTH_LONG).show()
                          }
                      }
@@ -447,8 +524,18 @@ class SleepManager(
         stateStartTime = currentTime
         pendingState = null
         
+        // Record state change in timeline
+        val timestampMs = (currentTime * 1000).toLong()
+        stateTimeline.add(timestampMs to newState.value)
+        
         // Update sleeping status
         val isSleeping = newState == SleepState.DEEP_SLEEP || newState == SleepState.LIGHT_SLEEP || newState == SleepState.REM_SLEEP
+        
+        // Track spasms
+        if (newState == SleepState.SPASM) {
+            spasmCount++
+            log("Spasm detected! Count: $spasmCount")
+        }
         
         // Check for Wake Up: Transition from Sleep (directly or via Spasm) to Awake
         if (newState == SleepState.AWAKE) {
@@ -478,11 +565,26 @@ class SleepManager(
     private fun updateMetrics(currentTime: Double) {
         if (lastUpdateTime > 0) {
             val delta = currentTime - lastUpdateTime
-            if (currentState == SleepState.DEEP_SLEEP || currentState == SleepState.LIGHT_SLEEP) {
-                totalSleepSeconds += delta
+            when (currentState) {
+                SleepState.DEEP_SLEEP -> {
+                    totalSleepSeconds += delta
+                    deepSleepSeconds += delta
+                }
+                SleepState.LIGHT_SLEEP, SleepState.REM_SLEEP -> {
+                    totalSleepSeconds += delta
+                    lightSleepSeconds += delta
+                }
+                else -> { /* awake, spasm, etc. — not counted as sleep */ }
             }
         }
         lastUpdateTime = currentTime
+        
+        // Accumulate breathing rate samples for average
+        val bpm = breathingAnalyzer.getBreathingRate(currentTime)
+        if (bpm > 0) {
+            breathingRateSum += bpm
+            breathingRateSamples++
+        }
     }
     
     fun getStats(): SleepStats {
@@ -492,17 +594,26 @@ class SleepManager(
         } else {
             0L
         }
+        val avgBpm = if (breathingRateSamples > 0) breathingRateSum / breathingRateSamples else 0.0
+        val qualityScore = computeQualityScore(
+            totalSleepSeconds, deepSleepSeconds, lightSleepSeconds,
+            wakeUpCount, spasmCount, duration.toDouble()
+        )
         
         return SleepStats(
             currentState = currentState,
             breathingDetected = currentState == SleepState.DEEP_SLEEP || currentState == SleepState.LIGHT_SLEEP,
             breathingRateBpm = breathingAnalyzer.getBreathingRate(currentTime),
-            sleepQualityScore = 85, // Placeholder logic
+            sleepQualityScore = qualityScore,
             totalSleepSeconds = totalSleepSeconds.toLong(),
+            deepSleepSeconds = deepSleepSeconds.toLong(),
+            lightSleepSeconds = lightSleepSeconds.toLong(),
             wakeUps = wakeUpCount,
+            spasmCount = spasmCount,
             eventsCount = 0,
             sleepPhase = breathingAnalyzer.getSleepPhase(currentTime),
-            sessionDurationSeconds = duration
+            sessionDurationSeconds = duration,
+            avgBreathingBpm = avgBpm
         )
     }
 }

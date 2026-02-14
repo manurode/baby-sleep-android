@@ -39,7 +39,7 @@ class BabySleepMonitorApp : android.app.Application() {
         database = androidx.room.Room.databaseBuilder(
             applicationContext,
             com.babysleepmonitor.data.db.AppDatabase::class.java, "baby-sleep-db"
-        ).build()
+        ).fallbackToDestructiveMigration().build()
 
         // Initialize shared SleepManager
         val dao = database.sleepDao()
