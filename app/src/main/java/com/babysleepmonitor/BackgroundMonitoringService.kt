@@ -63,15 +63,25 @@ class BackgroundMonitoringService : Service() {
         private const val NOTIFICATION_ID_SERVICE = 100
         private const val NOTIFICATION_ID_ALARM = 101
 
-        private const val SNAPSHOT_INTERVAL_MS = 300L // ~3.3 FPS
+        private const val SNAPSHOT_INTERVAL_MS = 200L // ~5 FPS (was 300/3.3 FPS)
         private const val MAX_CONSECUTIVE_FAILURES = 10
         private const val SNAPSHOT_DISCOVERY_RETRY_MS = 15_000L
         private val ONVIF_PORTS = listOf(8899, 80, 8080, 2020, 8000)
 
-        // ImageReader config
-        private const val CAPTURE_WIDTH = 640
-        private const val CAPTURE_HEIGHT = 480
-        private const val IMAGE_READER_MAX_IMAGES = 3
+        // ImageReader config — higher resolution = better motion detection.
+        // 1280x720 is a good balance: much better than 640x480, and software decoding
+        // on modern SoCs handles 720p fine at 5 FPS.
+        private const val CAPTURE_WIDTH = 1920
+        private const val CAPTURE_HEIGHT = 1080
+        private const val IMAGE_READER_MAX_IMAGES = 4
+
+        // Reference resolution for motion score scaling.
+        // SleepManager thresholds (HIGH_MOTION=3M, REM=800K-2M, DEEP=100K-800K) were
+        // calibrated against foreground frames at ~1920x1080.
+        // At 1280x720 the scale factor is ~2.25x (was ~6.75x at 640x480).
+        private const val REFERENCE_WIDTH = 1920
+        private const val REFERENCE_HEIGHT = 1080
+        private const val REFERENCE_AREA = REFERENCE_WIDTH * REFERENCE_HEIGHT // 2,073,600
 
         @Volatile var isRunning = false; private set
         @Volatile var lastMotionScore = 0.0; private set
@@ -92,6 +102,14 @@ class BackgroundMonitoringService : Service() {
     private var captureHandler: Handler? = null
     private var lastFrameProcessedMs = 0L
     @Volatile private var rtspFrameReceived = false
+
+    // Duplicate frame detection: VLC with software decoding sometimes outputs the same
+    // decoded frame twice. SimpleMotionDetector's absdiff then produces 0.0 even during
+    // real movement. We track the last non-zero raw score and its timestamp to detect
+    // these false zeros and skip them (so SleepManager's buffer isn't poisoned).
+    private var lastNonZeroRawScore = 0.0
+    private var lastNonZeroRawTime = 0L
+    private var consecutiveZeroFrames = 0
 
     // Coroutines
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -455,13 +473,63 @@ class BackgroundMonitoringService : Service() {
 
     private fun processFrame(bitmap: Bitmap) {
         val result = motionDetector?.processFrame(bitmap) ?: return
-        val state = sleepManager?.update(result.motionScore)
+        val now = System.currentTimeMillis()
+
+        // --- Duplicate frame detection ---
+        // VLC with software decoding + --no-drop-late-frames sometimes outputs the
+        // same decoded frame twice. When SimpleMotionDetector compares two identical
+        // frames, absdiff=0 → raw motionScore=0.0, even during violent movement.
+        // Pattern: 0, 1728135, 0, 659238, 0, 733252, 0, 0, 0 ...
+        //
+        // Fix: If raw score is 0.0 but we recently (within 1s) had a non-zero score,
+        // this is likely a duplicate frame → skip it (don't feed to SleepManager).
+        // Only after several consecutive zeros (>= 5 = ~1s at 5 FPS) do we consider
+        // it real absence of motion and pass it through.
+        val rawScore = result.motionScore
+
+        if (rawScore == 0.0) {
+            consecutiveZeroFrames++
+            // If we had motion recently and haven't seen enough consecutive real zeros,
+            // this is probably a duplicate frame from VLC — skip it.
+            if (lastNonZeroRawScore > 0.0 &&
+                (now - lastNonZeroRawTime) < 1000L &&
+                consecutiveZeroFrames < 5) {
+                // Skip this frame — don't pollute SleepManager buffer
+                totalFramesProcessed++
+                frameCount = totalFramesProcessed
+                if (totalFramesProcessed % 10 == 0L) {
+                    Log.d(TAG, "Frame #$totalFramesProcessed: SKIPPED duplicate (raw=0, " +
+                        "lastNonZero=${lastNonZeroRawScore.toInt()}, zeroStreak=$consecutiveZeroFrames)")
+                }
+                return
+            }
+        } else {
+            lastNonZeroRawScore = rawScore
+            lastNonZeroRawTime = now
+            consecutiveZeroFrames = 0
+        }
+
+        // --- Scale motion score ---
+        // motionScore is sum of white pixels → proportional to frame area.
+        // Scale to match SleepManager thresholds (calibrated for ~1920x1080).
+        val frameArea = result.width * result.height
+        val scaleFactor = if (frameArea > 0) REFERENCE_AREA.toDouble() / frameArea else 1.0
+        val scaledScore = rawScore * scaleFactor
+
+        val state = sleepManager?.update(scaledScore)
 
         totalFramesProcessed++
         frameCount = totalFramesProcessed
-        lastMotionScore = result.motionScore
+        lastMotionScore = scaledScore
         lastState = state ?: SleepState.UNKNOWN
         consecutiveFailures = 0
+
+        // Debug log every 10 frames
+        if (totalFramesProcessed % 10 == 0L) {
+            Log.d(TAG, "Frame #$totalFramesProcessed: raw=${rawScore.toInt()}, " +
+                "scaled=${scaledScore.toInt()} (x${String.format("%.2f", scaleFactor)}), " +
+                "res=${result.width}x${result.height}, state=${state?.value}")
+        }
 
         // Alarm logic
         if (state == SleepState.NO_BREATHING && !isAlarmActive) {
@@ -476,7 +544,8 @@ class BackgroundMonitoringService : Service() {
         if (totalFramesProcessed % 50 == 0L) {
             val upMin = (System.currentTimeMillis() - serviceStartTimeMs) / 60_000
             Log.i(TAG, "Status: frames=$totalFramesProcessed, " +
-                "score=${result.motionScore.toInt()}, state=${state?.value}, uptime=${upMin}min")
+                "rawScore=${rawScore.toInt()}, scaledScore=${scaledScore.toInt()}, " +
+                "scale=${String.format("%.2f", scaleFactor)}x, state=${state?.value}, uptime=${upMin}min")
             mainHandler.post {
                 updateNotification("Active • ${totalFramesProcessed} frames • ${state?.value}")
             }
