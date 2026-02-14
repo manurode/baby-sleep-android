@@ -51,15 +51,21 @@ class BreathingAnalyzer {
     val LOW_VARIABILITY_THRESHOLD = 0.10
     val HIGH_VARIABILITY_THRESHOLD = 0.20
 
+    // If no new breath peak is detected within this time, BPM decays to 0.
+    // This prevents stale BPM values from blocking the NO_BREATHING state.
+    private val BPM_DECAY_TIMEOUT = 15.0 // seconds
+
     private val breathTimestamps = LinkedList<Double>() // last 100
     private val breathIntervals = LinkedList<Double>() // last 50
     private var lastPeakTime: Double? = null
+    private var lastBreathDetectedTime: Double? = null // track when we last saw a valid breath
     private var inPeak = false
 
     fun reset() {
         breathTimestamps.clear()
         breathIntervals.clear()
         lastPeakTime = null
+        lastBreathDetectedTime = null
         inPeak = false
     }
 
@@ -78,6 +84,7 @@ class BreathingAnalyzer {
                         breathIntervals.add(interval)
                         if (breathIntervals.size > 50) breathIntervals.removeFirst()
                         
+                        lastBreathDetectedTime = timestamp
                         return interval
                     } else if (interval > MAX_BREATH_INTERVAL) {
                         breathTimestamps.add(timestamp)
@@ -86,6 +93,7 @@ class BreathingAnalyzer {
                 } else {
                     lastPeakTime = timestamp
                     breathTimestamps.add(timestamp)
+                    lastBreathDetectedTime = timestamp
                 }
             }
         } else {
@@ -94,15 +102,28 @@ class BreathingAnalyzer {
         return null
     }
 
-    fun getBreathingRate(): Double {
+    /**
+     * Returns true if BPM data has gone stale (no breath peaks in BPM_DECAY_TIMEOUT seconds).
+     * When stale, getBreathingRate() returns 0.0 to allow NO_BREATHING detection.
+     */
+    private fun isStale(currentTime: Double): Boolean {
+        val lastBreath = lastBreathDetectedTime ?: return true
+        return (currentTime - lastBreath) > BPM_DECAY_TIMEOUT
+    }
+
+    fun getBreathingRate(currentTime: Double = Double.MAX_VALUE): Double {
         if (breathIntervals.size < 3) return 0.0
+        // If no new breath detected in BPM_DECAY_TIMEOUT, report 0 BPM
+        if (currentTime < Double.MAX_VALUE && isStale(currentTime)) return 0.0
         val recent = breathIntervals.takeLast(10)
         val avg = recent.average()
         return if (avg > 0) 60.0 / avg else 0.0
     }
 
-    fun getVariability(): Double {
+    fun getVariability(currentTime: Double = Double.MAX_VALUE): Double {
         if (breathIntervals.size < 5) return 0.0
+        // If stale, variability is meaningless
+        if (currentTime < Double.MAX_VALUE && isStale(currentTime)) return 0.0
         val recent = breathIntervals.takeLast(20)
         val mean = recent.average()
         if (mean > 0 && recent.size >= 2) {
@@ -112,8 +133,8 @@ class BreathingAnalyzer {
         return 0.0
     }
 
-    fun getSleepPhase(): String {
-        val v = getVariability()
+    fun getSleepPhase(currentTime: Double = Double.MAX_VALUE): String {
+        val v = getVariability(currentTime)
         return when {
             v == 0.0 -> "unknown"
             v < LOW_VARIABILITY_THRESHOLD -> "deep"
@@ -315,9 +336,9 @@ class SleepManager(
             "recentMean" to recentMean,
             "recentMax" to recentMax,
             "max30" to max30,
-            "bpm" to breathingAnalyzer.getBreathingRate(),
-            "variability" to breathingAnalyzer.getVariability(),
-            "sleepPhase" to breathingAnalyzer.getSleepPhase()
+            "bpm" to breathingAnalyzer.getBreathingRate(currentTime),
+            "variability" to breathingAnalyzer.getVariability(currentTime),
+            "sleepPhase" to breathingAnalyzer.getSleepPhase(currentTime)
         )
     }
     
@@ -374,8 +395,12 @@ class SleepManager(
             return SleepState.DEEP_SLEEP
         }
         
-        // Fallback
-        log("StateLogic: Fallback to LIGHT_SLEEP")
+        // Fallback — log diagnostic info showing why we didn't match any specific state
+        log("StateLogic: Fallback to LIGHT_SLEEP " +
+            "(mean=${String.format("%.0f", mean)} noMotion=${mean < NO_MOTION_THRESHOLD}, " +
+            "bpm=${String.format("%.1f", bpm)} bpmZero=${bpm == 0.0}, " +
+            "deepRange=${isDeepMotion}, remRange=${mean in REM_SLEEP_RANGE}, " +
+            "recentMax=${String.format("%.0f", recentMax)}, max30=${String.format("%.0f", max30)})")
         return SleepState.LIGHT_SLEEP
     }
     
@@ -461,8 +486,9 @@ class SleepManager(
     }
     
     fun getStats(): SleepStats {
+        val currentTime = timeProvider() / 1000.0
         val duration = if (sessionStartTime != null) {
-            (timeProvider() / 1000.0 - sessionStartTime!!).toLong()
+            (currentTime - sessionStartTime!!).toLong()
         } else {
             0L
         }
@@ -470,12 +496,12 @@ class SleepManager(
         return SleepStats(
             currentState = currentState,
             breathingDetected = currentState == SleepState.DEEP_SLEEP || currentState == SleepState.LIGHT_SLEEP,
-            breathingRateBpm = breathingAnalyzer.getBreathingRate(),
+            breathingRateBpm = breathingAnalyzer.getBreathingRate(currentTime),
             sleepQualityScore = 85, // Placeholder logic
             totalSleepSeconds = totalSleepSeconds.toLong(),
             wakeUps = wakeUpCount,
             eventsCount = 0,
-            sleepPhase = breathingAnalyzer.getSleepPhase(),
+            sleepPhase = breathingAnalyzer.getSleepPhase(currentTime),
             sessionDurationSeconds = duration
         )
     }
