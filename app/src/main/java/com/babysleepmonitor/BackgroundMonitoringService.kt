@@ -175,11 +175,7 @@ class BackgroundMonitoringService : Service() {
     // ==================== Monitoring Orchestration ====================
 
     private fun startMonitoring() {
-        motionDetector = SimpleMotionDetector().apply {
-            onCalibrationComplete = { debugBitmap ->
-                saveCalibrationDebugImage(debugBitmap)
-            }
-        }
+        motionDetector = SimpleMotionDetector()
         sleepManager = (application as BabySleepMonitorApp).sharedSleepManager
         snapshotClient = OnvifSnapshotClient(username, password)
 
@@ -563,33 +559,6 @@ class BackgroundMonitoringService : Service() {
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
             mainHandler.post { updateNotification("⚠️ Camera connection issue") }
             consecutiveFailures = 0
-        }
-    }
-    // ==================== Debug Image ====================
-
-    private fun saveCalibrationDebugImage(bitmap: Bitmap) {
-        try {
-            val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
-                .format(java.util.Date())
-            val filename = "calibration_debug_$timestamp.png"
-
-            // Save to app's external files dir: /sdcard/Android/data/com.babysleepmonitor/files/
-            val dir = getExternalFilesDir(null)
-            if (dir != null) {
-                val file = java.io.File(dir, filename)
-                java.io.FileOutputStream(file).use { fos ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
-                }
-                Log.i(TAG, "📸 Calibration debug image saved: ${file.absolutePath}")
-                Log.i(TAG, "   → Use Device File Explorer in Android Studio to view it")
-                Log.i(TAG, "   → Or: adb pull ${file.absolutePath}")
-            } else {
-                Log.w(TAG, "External files dir unavailable, cannot save debug image")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to save calibration debug image: ${e.message}")
-        } finally {
-            bitmap.recycle()
         }
     }
 
